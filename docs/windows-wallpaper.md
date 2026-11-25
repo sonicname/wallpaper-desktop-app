@@ -9,7 +9,17 @@ Những gì đã kiểm chứng trên máy thật ngày 25/11/2026 (Windows 11 2
 3. Đọc trạng thái hiện tại và ghi vào lịch sử **trước khi** đổi. Ảnh của chương trình khác được sao một bản, để hoàn tác được cả khi file gốc bị xóa.
 4. Đặt qua `IDesktopWallpaper` rồi chờ tới khi đọc lại đúng. Nếu lỗi, trả lại trạng thái cũ.
 
-Lịch sử giữ tối đa 10 bước, và không bao giờ bỏ bước đầu tiên (hình nền trước khi dùng app).
+Lịch sử giữ tối đa 10 bước **cho mỗi virtual desktop**, và không bỏ bước đầu tiên (hình nền trước khi dùng app). Riêng khi có hơn 20 desktop thì lịch sử của desktop lâu không đổi nhất bị xóa.
+
+## Virtual desktop
+
+Windows chỉ cho API công khai đổi hình nền của desktop đang đứng, nên app gắn mọi thay đổi với desktop lúc người dùng bấm nút:
+
+- Mã desktop lấy từ `IVirtualDesktopManager`: hỏi cửa sổ đang đứng trước, rồi tới các cửa sổ khác đang hiện. Desktop trống hoàn toàn thì không có câu trả lời.
+- Hoàn tác chỉ dùng lịch sử của desktop hiện tại.
+- Chuyển desktop trong lúc tải ảnh: không đổi gì và báo cho người dùng.
+- Chuyển desktop đúng lúc đang đổi: không rollback, vì rollback sẽ rơi vào desktop mới. Ảnh và bước hoàn tác được giữ lại.
+- Ảnh đang hiện ở desktop khác không bị dọn.
 
 ## Đã kiểm chứng
 
@@ -24,6 +34,7 @@ Lịch sử giữ tối đa 10 bước, và không bao giờ bỏ bước đầu
 
 ## Hạn chế đã biết
 
-- **Hoàn tác sau khi chuyển virtual desktop** sẽ áp dụng cho desktop đang đứng, không phải desktop đã đổi. App chưa phát hiện trường hợp này.
+- Hoàn tác sau khi chuyển desktop đã được thử tay trên máy thật (25/11/2026). Trường hợp chuyển desktop trong lúc đang tải hoặc đang đổi mới chỉ thử bằng desktop giả lập. Chưa biết ngay sau khi chuyển, Windows có trả về hình nền của desktop cũ trong chốc lát hay không.
+- Nếu ghim cửa sổ app lên mọi desktop thì Windows không cho biết mã của nó; app dựa vào các cửa sổ khác.
 - Spotlight và slideshow bị tắt khi đặt ảnh và hoàn tác không bật lại được. App cảnh báo trước; giá trị nhận biết Spotlight (`BackgroundType = 3`) chưa được kiểm chứng.
 - Màn hình không có mặt lúc hoàn tác sẽ bị bỏ qua.

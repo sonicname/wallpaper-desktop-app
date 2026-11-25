@@ -4,6 +4,7 @@
 mod desktop;
 mod link;
 mod screens;
+mod workspace;
 
 pub use desktop::WindowsDesktop;
 pub use link::open_link;

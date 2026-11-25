@@ -53,11 +53,17 @@ pub fn apply_error(error: &ApplyError) -> String {
         ApplyError::Desktop(DesktopError::NotApplied) => {
             "Windows không nhận hình nền. Có thể máy bị quản trị viên khóa.".into()
         }
+        ApplyError::Desktop(DesktopError::OtherWorkspace) => {
+            "Bạn đã chuyển sang desktop khác nên hình nền chưa đổi.".into()
+        }
+        ApplyError::Desktop(DesktopError::WorkspaceSwitched) => {
+            "Bạn chuyển desktop đúng lúc đang đổi. Hãy quay lại kiểm tra hình nền.".into()
+        }
         ApplyError::Desktop(DesktopError::Missing(_)) => {
             "Không hoàn tác được vì ảnh trước đó đã bị xóa.".into()
         }
         ApplyError::Desktop(DesktopError::System(_)) => "Windows báo lỗi khi đổi hình nền.".into(),
-        ApplyError::NothingToUndo => "Không còn gì để hoàn tác.".into(),
+        ApplyError::NothingToUndo => "Desktop này không còn gì để hoàn tác.".into(),
     }
 }
 

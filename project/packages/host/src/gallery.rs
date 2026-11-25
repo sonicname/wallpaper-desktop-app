@@ -19,17 +19,24 @@ use crate::Pixels;
 const MAX_PNG_BYTES: usize = 20_000_000;
 /// Pictures of other programs above this size are not copied.
 const MAX_KEPT_BYTES: u64 = 60_000_000;
+/// Steps per workspace.
 const MAX_HISTORY: usize = 10;
+/// Workspaces come and go, and nothing tells when one is gone for good.
+const MAX_WORKSPACES: usize = 20;
 
-/// The pictures shown on the desktop and what was there before them.
+/// The pictures shown on the desktop and what was there before them. Every workspace has a
+/// history of its own.
 pub struct Gallery {
     dir: PathBuf,
 }
 
 #[derive(Default, Serialize, Deserialize)]
 struct History {
-    /// Oldest first. The first entry is what the user had before this app changed anything.
+    /// Oldest first. The first entry of a workspace is what the user had before this app
+    /// changed anything there.
     entries: Vec<Backdrop>,
+    /// What each workspace shows now, least recently changed first.
+    shown: Vec<Backdrop>,
 }
 
 impl Gallery {
@@ -64,31 +71,53 @@ impl Gallery {
                 picture.kept = self.keep(&picture.path);
             }
         }
+        let workspace = backdrop.workspace.clone();
         let mut history = self.history();
         history.entries.push(backdrop);
-        if history.entries.len() > MAX_HISTORY {
+        let own: Vec<usize> = (0..history.entries.len())
+            .filter(|i| history.entries[*i].workspace == workspace)
+            .collect();
+        if own.len() > MAX_HISTORY {
             // The original stays reachable, however often the wallpaper changes.
-            history.entries.remove(1);
+            history.entries.remove(own[1]);
         }
         self.store(&history)
     }
 
-    /// The state before the last change.
-    pub fn previous(&self) -> Option<Backdrop> {
-        self.history().entries.pop()
+    /// The state of `workspace` before the last change to it.
+    pub fn previous(&self, workspace: Option<&str>) -> Option<Backdrop> {
+        let mut history = self.history();
+        let last = last_of(&history, workspace)?;
+        Some(history.entries.swap_remove(last))
     }
 
-    pub fn forget_previous(&self) -> io::Result<()> {
+    pub fn forget_previous(&self, workspace: Option<&str>) -> io::Result<()> {
         let mut history = self.history();
-        history.entries.pop();
+        if let Some(last) = last_of(&history, workspace) {
+            history.entries.remove(last);
+        }
         self.store(&history)
     }
 
-    /// Deletes pictures that are neither shown nor needed to go back.
-    pub fn clean(&self, shown: &Backdrop) -> io::Result<()> {
-        let history = self.history();
-        let all = history.entries.iter().chain([shown]);
-        let used: Vec<&Path> = all
+    /// Records what a workspace shows now, and deletes the pictures no workspace shows or needs
+    /// to go back.
+    pub fn showing(&self, shown: Backdrop) -> io::Result<()> {
+        let mut history = self.history();
+        history.shown.retain(|b| b.workspace != shown.workspace);
+        history.shown.push(shown);
+        while history.shown.len() > MAX_WORKSPACES {
+            let oldest = history.shown.remove(0).workspace;
+            history.entries.retain(|b| b.workspace != oldest);
+        }
+        self.store(&history)?;
+        self.clean(&history)
+    }
+
+    fn clean(&self, history: &History) -> io::Result<()> {
+        let used: Vec<&Path> = history
+            .entries
+            .iter()
+            .chain(&history.shown)
             .flat_map(|b| &b.pictures)
             .flat_map(|p| [Some(&p.path), p.kept.as_ref()])
             .flatten()
@@ -136,6 +165,13 @@ impl Gallery {
     }
 }
 
+fn last_of(history: &History, workspace: Option<&str>) -> Option<usize> {
+    history
+        .entries
+        .iter()
+        .rposition(|b| b.workspace.as_deref() == workspace)
+}
+
 /// PNG, because Windows compresses JPEG wallpapers a second time.
 fn encode(pixels: &Pixels) -> io::Result<(Vec<u8>, &'static str)> {
     let (width, height) = (pixels.size.width, pixels.size.height);
@@ -170,6 +206,8 @@ mod tests {
     use super::*;
     use wallpaper_core::{BackdropMode, Picture, Size};
 
+    const HERE: Option<&str> = Some("here");
+
     struct Folder(PathBuf);
 
     impl Folder {
@@ -187,24 +225,33 @@ mod tests {
         }
     }
 
-    fn showing(path: &Path) -> Backdrop {
+    fn showing(workspace: &str, path: impl AsRef<Path>) -> Backdrop {
         Backdrop {
             mode: BackdropMode::Picture,
             placement: 4,
+            workspace: Some(workspace.into()),
             pictures: vec![Picture {
                 screen: "one".into(),
-                path: path.into(),
+                path: path.as_ref().into(),
                 kept: None,
             }],
         }
     }
 
     fn pixels(seed: u8) -> Pixels {
-        let size = Size::new(8, 4);
         Pixels {
-            size,
+            size: Size::new(8, 4),
             rgb: (0..96).map(|i| i ^ seed).collect(),
         }
+    }
+
+    fn undo_all(gallery: &Gallery, workspace: Option<&str>) -> Vec<PathBuf> {
+        let mut seen = vec![];
+        while let Some(previous) = gallery.previous(workspace) {
+            seen.push(previous.pictures[0].path.clone());
+            gallery.forget_previous(workspace).unwrap();
+        }
+        seen
     }
 
     #[test]
@@ -225,13 +272,11 @@ mod tests {
         let original = folder.0.join("mine.jpg");
         fs::write(&original, b"my picture").unwrap();
         let gallery = Gallery::open(folder.0.join("gallery")).unwrap();
-        gallery.remember(showing(&original)).unwrap();
+        gallery.remember(showing("here", &original)).unwrap();
         fs::remove_file(&original).unwrap();
         // Reopened, as after a restart.
-        let previous = Gallery::open(folder.0.join("gallery"))
-            .unwrap()
-            .previous()
-            .unwrap();
+        let gallery = Gallery::open(folder.0.join("gallery")).unwrap();
+        let previous = gallery.previous(HERE).unwrap();
         let found = previous.pictures[0].existing().unwrap();
         assert_eq!(fs::read(found).unwrap(), b"my picture");
     }
@@ -241,18 +286,38 @@ mod tests {
         let folder = Folder::new("history");
         let gallery = Gallery::open(&folder.0).unwrap();
         for i in 0..25 {
-            gallery
-                .remember(showing(Path::new(&format!("/p{i}"))))
-                .unwrap();
+            gallery.remember(showing("here", format!("/p{i}"))).unwrap();
         }
-        let mut seen = vec![];
-        while let Some(previous) = gallery.previous() {
-            seen.push(previous.pictures[0].path.clone());
-            gallery.forget_previous().unwrap();
-        }
+        let seen = undo_all(&gallery, HERE);
         assert_eq!(seen.len(), MAX_HISTORY);
         assert_eq!(seen[0], Path::new("/p24"));
         assert_eq!(seen[MAX_HISTORY - 1], Path::new("/p0"));
+    }
+
+    #[test]
+    fn every_workspace_has_its_own_history() {
+        let folder = Folder::new("workspaces");
+        let gallery = Gallery::open(&folder.0).unwrap();
+        for i in 0..15 {
+            gallery.remember(showing("a", format!("/a{i}"))).unwrap();
+            gallery.remember(showing("b", format!("/b{i}"))).unwrap();
+        }
+        let a = undo_all(&gallery, Some("a"));
+        assert!(
+            a.iter()
+                .all(|p| p.starts_with("/") && p.to_string_lossy().starts_with("/a"))
+        );
+        assert_eq!(
+            (a.len(), a[MAX_HISTORY - 1].as_path()),
+            (MAX_HISTORY, Path::new("/a0"))
+        );
+        // Undoing one workspace left the other alone.
+        let b = undo_all(&gallery, Some("b"));
+        assert_eq!(
+            (b.len(), b[MAX_HISTORY - 1].as_path()),
+            (MAX_HISTORY, Path::new("/b0"))
+        );
+        assert!(gallery.previous(None).is_none());
     }
 
     #[test]
@@ -260,13 +325,43 @@ mod tests {
         let folder = Folder::new("clean");
         let gallery = Gallery::open(&folder.0).unwrap();
         let [old, before, shown] = [1, 2, 3].map(|seed| gallery.save(&pixels(seed)).unwrap());
-        gallery.remember(showing(&before)).unwrap();
-        gallery.clean(&showing(&shown)).unwrap();
+        gallery.remember(showing("here", &before)).unwrap();
+        gallery.showing(showing("here", &shown)).unwrap();
+        let left = [&old, &before, &shown].map(|p| p.is_file());
+        assert_eq!(left, [false, true, true]);
+        assert!(gallery.previous(HERE).is_some());
+    }
+
+    #[test]
+    fn cleaning_keeps_what_another_workspace_shows() {
+        let folder = Folder::new("others");
+        let gallery = Gallery::open(&folder.0).unwrap();
+        let [first, second, third] = [1, 2, 3].map(|seed| gallery.save(&pixels(seed)).unwrap());
+        gallery.showing(showing("a", &first)).unwrap();
+        // Saved again, because nothing used it when "a" was recorded.
+        let second_again = gallery.save(&pixels(2)).unwrap();
+        assert_eq!(second, second_again);
+        gallery.showing(showing("b", &second)).unwrap();
+        assert!(first.is_file(), "workspace a still shows it");
+        gallery.save(&pixels(3)).unwrap();
+        gallery.showing(showing("a", &third)).unwrap();
         assert_eq!(
-            [old.is_file(), before.is_file(), shown.is_file()],
+            [&first, &second, &third].map(|p| p.is_file()),
             [false, true, true]
         );
-        assert!(gallery.previous().is_some());
+    }
+
+    #[test]
+    fn forgotten_workspaces_do_not_pile_up() {
+        let folder = Folder::new("many");
+        let gallery = Gallery::open(&folder.0).unwrap();
+        for i in 0..MAX_WORKSPACES + 3 {
+            let name = format!("w{i}");
+            gallery.remember(showing(&name, "/before")).unwrap();
+            gallery.showing(showing(&name, "/now")).unwrap();
+        }
+        assert!(gallery.previous(Some("w2")).is_none());
+        assert!(gallery.previous(Some("w3")).is_some());
     }
 
     #[test]
@@ -274,8 +369,8 @@ mod tests {
         let folder = Folder::new("damaged");
         let gallery = Gallery::open(&folder.0).unwrap();
         fs::write(folder.0.join("history.json"), b"{oops").unwrap();
-        assert!(gallery.previous().is_none());
-        gallery.remember(showing(Path::new("/p"))).unwrap();
-        assert!(gallery.previous().is_some());
+        assert!(gallery.previous(HERE).is_none());
+        gallery.remember(showing("here", "/p")).unwrap();
+        assert!(gallery.previous(HERE).is_some());
     }
 }

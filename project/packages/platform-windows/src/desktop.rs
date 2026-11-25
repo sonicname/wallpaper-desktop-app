@@ -23,7 +23,7 @@ use windows::{
     core::{HSTRING, Interface, PCWSTR, PWSTR, w},
 };
 
-use crate::{screens::screens, wide};
+use crate::{screens::screens, wide, workspace};
 
 const PATIENCE: Duration = Duration::from_secs(3);
 
@@ -35,12 +35,30 @@ impl Desktop for WindowsDesktop {
         screens()
     }
 
-    fn read(&self) -> Result<Backdrop, DesktopError> {
-        with_shell(|shell| shell.read())
+    fn workspace(&self) -> Option<String> {
+        with_com(|| Ok(workspace::current())).ok().flatten()
     }
 
-    fn apply(&self, pictures: &[(String, PathBuf)]) -> Result<(), DesktopError> {
+    fn read(&self) -> Result<Backdrop, DesktopError> {
         with_shell(|shell| {
+            // Do not mix two workspaces if the user switches right now.
+            for _ in 0..3 {
+                let backdrop = shell.read()?;
+                if workspace::current() == backdrop.workspace {
+                    return Ok(backdrop);
+                }
+            }
+            Err(DesktopError::OtherWorkspace)
+        })
+    }
+
+    fn apply(
+        &self,
+        pictures: &[(String, PathBuf)],
+        workspace: Option<&str>,
+    ) -> Result<(), DesktopError> {
+        with_shell(|shell| {
+            require(workspace)?;
             let wanted: Vec<_> = pictures
                 .iter()
                 .map(|(screen, path)| (screen.as_str(), path.as_path()))
@@ -49,7 +67,7 @@ impl Desktop for WindowsDesktop {
             // Pictures already have the size of their screen, so this only matters later, for
             // example after the resolution changes.
             shell.place(DWPOS_FILL)?;
-            shell.settle(&wanted)
+            shell.settle(&wanted, workspace)
         })
     }
 
@@ -69,9 +87,11 @@ impl Desktop for WindowsDesktop {
             wanted.push((picture.screen.as_str(), path));
         }
         with_shell(|shell| {
+            let workspace = backdrop.workspace.as_deref();
+            require(workspace)?;
             shell.show(&wanted)?;
             shell.place(DESKTOP_WALLPAPER_POSITION(backdrop.placement))?;
-            shell.settle(&wanted)
+            shell.settle(&wanted, workspace)
         })
     }
 }
@@ -80,6 +100,7 @@ struct Shell(IDesktopWallpaper);
 
 impl Shell {
     fn read(&self) -> Result<Backdrop, DesktopError> {
+        let workspace = workspace::current();
         let mut pictures = vec![];
         // SAFETY: plain COM calls; returned strings are freed by `take`.
         let count = unsafe { self.0.GetMonitorDevicePathCount() }.map_err(system)?;
@@ -98,6 +119,7 @@ impl Shell {
         Ok(Backdrop {
             mode: self.mode(&pictures),
             placement,
+            workspace,
             pictures,
         })
     }
@@ -143,18 +165,29 @@ impl Shell {
 
     /// Waits until the pictures can be read back. Explorer takes about half a second, and until
     /// then reading returns the old state, which must not end up in the undo history.
-    fn settle(&self, pictures: &[(&str, &Path)]) -> Result<(), DesktopError> {
+    fn settle(
+        &self,
+        pictures: &[(&str, &Path)],
+        workspace: Option<&str>,
+    ) -> Result<(), DesktopError> {
         let shown = |(screen, path): &(&str, &Path)| {
             path.as_os_str().is_empty() || self.get(screen).is_ok_and(|now| same_file(&now, path))
         };
         let start = Instant::now();
-        while !pictures.iter().all(shown) {
+        loop {
+            // Right after a switch no window may be in front yet, which means nothing.
+            let now = workspace::current();
+            if workspace.is_some() && now.is_some() && now.as_deref() != workspace {
+                return Err(DesktopError::WorkspaceSwitched);
+            }
+            if pictures.iter().all(shown) {
+                return Ok(());
+            }
             if start.elapsed() > PATIENCE {
                 return Err(DesktopError::NotApplied);
             }
             thread::sleep(Duration::from_millis(25));
         }
-        Ok(())
     }
 
     fn place(&self, position: DESKTOP_WALLPAPER_POSITION) -> Result<(), DesktopError> {
@@ -205,20 +238,37 @@ fn background_type() -> Option<u32> {
     result.is_ok().then_some(value)
 }
 
-/// Runs `work` on a thread of its own, because the caller's thread may already have chosen
-/// another COM apartment. Creating the object takes about a millisecond, and a fresh one never
-/// outlives an Explorer restart.
+fn require(workspace: Option<&str>) -> Result<(), DesktopError> {
+    if workspace::current().as_deref() == workspace {
+        Ok(())
+    } else {
+        Err(DesktopError::OtherWorkspace)
+    }
+}
+
+/// Creating the object takes about a millisecond, and a fresh one never outlives an Explorer
+/// restart.
 fn with_shell<T: Send>(
     work: impl FnOnce(&Shell) -> Result<T, DesktopError> + Send,
 ) -> Result<T, DesktopError> {
+    with_com(|| {
+        // SAFETY: COM is initialized on this thread.
+        let shell = unsafe { CoCreateInstance(&DesktopWallpaper, None, CLSCTX_ALL) };
+        work(&Shell(shell.map_err(system)?))
+    })
+}
+
+/// Runs `work` on a thread of its own, because the caller's thread may already have chosen
+/// another COM apartment.
+fn with_com<T: Send>(
+    work: impl FnOnce() -> Result<T, DesktopError> + Send,
+) -> Result<T, DesktopError> {
     let run = || {
-        // SAFETY: the matching `CoUninitialize` runs after every COM object is released.
+        // SAFETY: the matching `CoUninitialize` runs after `work` released its objects.
         unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }
             .ok()
             .map_err(system)?;
-        let result = unsafe { CoCreateInstance(&DesktopWallpaper, None, CLSCTX_ALL) }
-            .map_err(system)
-            .and_then(|shell| work(&Shell(shell)));
+        let result = work();
         unsafe { CoUninitialize() };
         result
     };
@@ -264,7 +314,7 @@ mod tests {
             .map(|p| (p.screen.clone(), picture.clone()))
             .collect();
         for _ in 0..2 {
-            let applied = WindowsDesktop.apply(&wanted);
+            let applied = WindowsDesktop.apply(&wanted, before.workspace.as_deref());
             let during = WindowsDesktop.read().unwrap();
             let restored = WindowsDesktop.restore(&before);
             assert_eq!((applied, restored), (Ok(()), Ok(())));
@@ -299,6 +349,29 @@ mod tests {
             matches!(result, Err(DesktopError::Missing(_))),
             "{result:?}"
         );
+        assert_eq!(WindowsDesktop.read().unwrap(), before);
+    }
+
+    /// The fix for changing the wrong virtual desktop: both calls must refuse, and change nothing.
+    #[test]
+    fn another_workspace_is_never_touched() {
+        let before = WindowsDesktop.read().unwrap();
+        let elsewhere = Some("00000000-0000-0000-0000-000000000001".to_owned());
+        assert_ne!(before.workspace, elsewhere);
+        // Asks for what is already shown, so that even a broken check could do no harm.
+        let pictures: Vec<_> = before
+            .pictures
+            .iter()
+            .map(|p| (p.screen.clone(), p.path.clone()))
+            .collect();
+        let applied = WindowsDesktop.apply(&pictures, elsewhere.as_deref());
+        let foreign = Backdrop {
+            workspace: elsewhere,
+            ..before.clone()
+        };
+        let restored = WindowsDesktop.restore(&foreign);
+        assert_eq!(applied, Err(DesktopError::OtherWorkspace));
+        assert_eq!(restored, Err(DesktopError::OtherWorkspace));
         assert_eq!(WindowsDesktop.read().unwrap(), before);
     }
 

@@ -81,9 +81,12 @@ impl Provider for Fake {
     }
 }
 
-/// A landscape and a portrait screen.
+/// A landscape and a portrait screen, and two workspaces with pictures of their own.
 struct FakeDesktop {
-    shown: Mutex<Backdrop>,
+    front: Mutex<usize>,
+    shown: Mutex<[Backdrop; 2]>,
+    /// Switches to the other workspace in the middle of the next change.
+    switches: AtomicBool,
     fails: AtomicBool,
 }
 
@@ -94,28 +97,50 @@ impl FakeDesktop {
             path: picture.into(),
             kept: None,
         });
+        let backdrop = |workspace: &str| Backdrop {
+            mode: BackdropMode::Picture,
+            placement: 2,
+            workspace: Some(workspace.into()),
+            pictures: pictures.clone().into(),
+        };
         Self {
-            shown: Mutex::new(Backdrop {
-                mode: BackdropMode::Picture,
-                placement: 2,
-                pictures: pictures.into(),
-            }),
+            front: Mutex::new(0),
+            shown: Mutex::new([backdrop("first"), backdrop("second")]),
+            switches: AtomicBool::new(false),
             fails: AtomicBool::new(false),
         }
     }
 
+    fn switch_to(&self, workspace: usize) {
+        *self.front.lock().unwrap() = workspace;
+    }
+
     fn path(&self, screen: usize) -> PathBuf {
-        self.shown.lock().unwrap().pictures[screen].path.clone()
+        self.path_on(*self.front.lock().unwrap(), screen)
+    }
+
+    fn path_on(&self, workspace: usize, screen: usize) -> PathBuf {
+        self.shown.lock().unwrap()[workspace].pictures[screen]
+            .path
+            .clone()
+    }
+
+    fn edit(&self, change: impl FnOnce(&mut Backdrop)) {
+        change(&mut self.shown.lock().unwrap()[*self.front.lock().unwrap()]);
     }
 
     fn set(&self, screen: &str, path: &Path) {
-        let mut shown = self.shown.lock().unwrap();
-        let picture = shown
-            .pictures
-            .iter_mut()
-            .find(|p| p.screen == screen)
-            .unwrap();
-        picture.path = path.into();
+        self.edit(|shown| {
+            let mut pictures = shown.pictures.iter_mut();
+            pictures.find(|p| p.screen == screen).unwrap().path = path.into();
+        });
+    }
+
+    fn require(&self, workspace: Option<&str>) -> Result<(), DesktopError> {
+        if self.workspace().as_deref() == workspace {
+            return Ok(());
+        }
+        Err(DesktopError::OtherWorkspace)
     }
 }
 
@@ -132,11 +157,21 @@ impl Desktop for FakeDesktop {
         ]
     }
 
-    fn read(&self) -> Result<Backdrop, DesktopError> {
-        Ok(self.shown.lock().unwrap().clone())
+    fn workspace(&self) -> Option<String> {
+        self.read().unwrap().workspace
     }
 
-    fn apply(&self, pictures: &[(String, PathBuf)]) -> Result<(), DesktopError> {
+    fn read(&self) -> Result<Backdrop, DesktopError> {
+        let front = *self.front.lock().unwrap();
+        Ok(self.shown.lock().unwrap()[front].clone())
+    }
+
+    fn apply(
+        &self,
+        pictures: &[(String, PathBuf)],
+        workspace: Option<&str>,
+    ) -> Result<(), DesktopError> {
+        self.require(workspace)?;
         for (screen, path) in pictures {
             assert!(path.is_file());
             self.set(screen, path);
@@ -144,18 +179,23 @@ impl Desktop for FakeDesktop {
                 return Err(DesktopError::NotApplied);
             }
         }
-        self.shown.lock().unwrap().placement = 4;
+        self.edit(|shown| shown.placement = 4);
+        if self.switches.swap(false, Ordering::Relaxed) {
+            self.switch_to(1);
+            return Err(DesktopError::WorkspaceSwitched);
+        }
         Ok(())
     }
 
     fn restore(&self, backdrop: &Backdrop) -> Result<(), DesktopError> {
+        self.require(backdrop.workspace.as_deref())?;
         for picture in &backdrop.pictures {
             let path = picture
                 .existing()
                 .ok_or(DesktopError::Missing(picture.path.clone()))?;
             self.set(&picture.screen, path);
         }
-        self.shown.lock().unwrap().placement = backdrop.placement;
+        self.edit(|shown| shown.placement = backdrop.placement);
         Ok(())
     }
 }
@@ -431,12 +471,66 @@ fn browsing() {
     }
     assert!(!window.get_can_undo());
     assert_eq!(desktop.path(1), mine);
-    assert_eq!(desktop.shown.lock().unwrap().placement, 2);
+    assert_eq!(desktop.read().unwrap().placement, 2);
     let left: Vec<_> = fs::read_dir(data.join("pictures"))
         .unwrap()
         .map(|e| e.unwrap().file_name())
         .collect();
     assert_eq!(left, ["history.json"], "unused pictures must be deleted");
+
+    // Undo belongs to a workspace: on another one there is nothing to undo.
+    let change = |stage: &mut Stage, action: fn(&AppWindow)| {
+        action(&window);
+        assert!(stage.run_until(WAIT, || !window.get_changing()));
+    };
+    change(&mut stage, AppWindow::invoke_apply);
+    let on_first = desktop.path(0);
+    assert_ne!(on_first, mine);
+    desktop.switch_to(1);
+    change(&mut stage, AppWindow::invoke_undo);
+    assert!(
+        toast(&window).contains("không còn gì"),
+        "{}",
+        toast(&window)
+    );
+    assert_eq!(desktop.path_on(0, 0), on_first);
+    assert_eq!(desktop.path_on(1, 0), mine);
+
+    // A change here keeps the picture the other workspace shows, and has its own way back.
+    window.invoke_step(-1);
+    change(&mut stage, AppWindow::invoke_apply);
+    assert_ne!(desktop.path_on(1, 0), mine);
+    assert!(on_first.is_file(), "the first workspace still shows it");
+    change(&mut stage, AppWindow::invoke_undo);
+    assert_eq!(desktop.path_on(1, 0), mine);
+    assert_eq!(desktop.path_on(0, 0), on_first);
+    desktop.switch_to(0);
+    change(&mut stage, AppWindow::invoke_undo);
+    assert_eq!(desktop.path_on(0, 0), mine);
+
+    // Switching while the picture is prepared changes neither workspace.
+    window.invoke_apply();
+    desktop.switch_to(1);
+    assert!(stage.run_until(WAIT, || !window.get_changing()));
+    assert!(toast(&window).contains("chưa đổi"), "{}", toast(&window));
+    assert_eq!(
+        (desktop.path_on(0, 0), desktop.path_on(1, 0)),
+        (mine.clone(), mine.clone())
+    );
+
+    // Switching in the middle of the change never touches the new one, and can be undone later.
+    desktop.switch_to(0);
+    desktop.switches.store(true, Ordering::Relaxed);
+    change(&mut stage, AppWindow::invoke_apply);
+    assert!(toast(&window).contains("quay lại"), "{}", toast(&window));
+    assert_eq!(desktop.path_on(1, 0), mine);
+    assert!(
+        desktop.path_on(0, 0).is_file(),
+        "its picture must not be deleted"
+    );
+    desktop.switch_to(0);
+    change(&mut stage, AppWindow::invoke_undo);
+    assert_eq!(desktop.path_on(0, 0), mine);
 
     // No result is explained.
     fake.answers(|_| Ok(Page::default()));

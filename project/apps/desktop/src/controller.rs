@@ -20,7 +20,7 @@ use wallpaper_host::{DiskCache, Gallery, HostHttp, Pixels, cover};
 
 use crate::{
     AppWindow, Detail, Option as UiOption, Shade,
-    apply::{self, ApplyError},
+    apply::{self, ApplyError, Place},
     grid::{self, GridModel},
     loader::Loader,
     text,
@@ -523,7 +523,10 @@ impl Controller {
         thread::spawn(move || {
             let mode = desktop.read().map_or(BackdropMode::Picture, |b| b.mode);
             let _ = slint::invoke_from_event_loop(move || {
-                with_current(|c| c.window.set_mode_warning(text::mode_warning(mode).into()))
+                with_current(|c| {
+                    c.window.set_mode_warning(text::mode_warning(mode).into());
+                    c.show_undo();
+                })
             });
         });
     }
@@ -578,8 +581,8 @@ impl Controller {
             None => self.screens.borrow().clone(),
         };
         let loader = self.loader.share();
-        self.change_desktop("Đã đặt làm hình nền.", move |gallery, desktop| {
-            apply::apply(&item, &screens, &loader, gallery, desktop)
+        self.change_desktop("Đã đặt làm hình nền.", move |place| {
+            apply::apply(&item, &screens, &loader, place)
         });
     }
 
@@ -590,7 +593,7 @@ impl Controller {
     fn change_desktop(
         &self,
         success: &'static str,
-        work: impl FnOnce(&Gallery, &dyn Desktop) -> Result<(), ApplyError> + Send + 'static,
+        work: impl FnOnce(&Place) -> Result<(), ApplyError> + Send + 'static,
     ) {
         let Some(gallery) = self.gallery.clone() else {
             return;
@@ -601,8 +604,14 @@ impl Controller {
         }
         self.window.set_changing(true);
         let desktop = self.desktop.clone();
+        // Taken now: the workspace the user is looking at while clicking is the one they mean.
+        let workspace = desktop.workspace();
         thread::spawn(move || {
-            let result = work(&gallery, &*desktop);
+            let result = work(&Place {
+                gallery: &gallery,
+                desktop: &*desktop,
+                workspace: workspace.as_deref(),
+            });
             let _ = slint::invoke_from_event_loop(move || {
                 with_current(|c| {
                     c.changing.set(false);
@@ -618,10 +627,11 @@ impl Controller {
     }
 
     fn show_undo(&self) {
+        let workspace = self.desktop.workspace();
         let can_undo = self
             .gallery
             .as_ref()
-            .is_some_and(|g| g.previous().is_some());
+            .is_some_and(|g| g.previous(workspace.as_deref()).is_some());
         self.window.set_can_undo(can_undo);
     }
 

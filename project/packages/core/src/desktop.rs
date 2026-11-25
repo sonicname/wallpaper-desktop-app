@@ -57,6 +57,9 @@ pub struct Backdrop {
     pub mode: BackdropMode,
     /// How pictures are placed on the screen. Only meaningful to the operating system.
     pub placement: i32,
+    /// The workspace this belongs to, such as a virtual desktop. None when it is unknown.
+    #[serde(default)]
+    pub workspace: Option<String>,
     pub pictures: Vec<Picture>,
 }
 
@@ -64,6 +67,10 @@ pub struct Backdrop {
 pub enum DesktopError {
     /// The system accepted the call but shows something else, usually because of a policy.
     NotApplied,
+    /// Another workspace is in front, so nothing was changed.
+    OtherWorkspace,
+    /// Another workspace came to the front during the change. The result is unknown.
+    WorkspaceSwitched,
     /// The picture to bring back no longer exists.
     Missing(PathBuf),
     System(String),
@@ -73,6 +80,8 @@ impl fmt::Display for DesktopError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotApplied => write!(f, "the system kept the old wallpaper"),
+            Self::OtherWorkspace => write!(f, "another workspace is in front"),
+            Self::WorkspaceSwitched => write!(f, "the workspace changed at the same time"),
             Self::Missing(path) => write!(f, "{} no longer exists", path.display()),
             Self::System(reason) => f.write_str(reason),
         }
@@ -81,12 +90,20 @@ impl fmt::Display for DesktopError {
 
 impl std::error::Error for DesktopError {}
 
-/// The wallpaper of the current user. Calls may block for a short time.
+/// The wallpaper of the workspace in front. Calls may block for a short time.
 pub trait Desktop: Send + Sync {
     /// Connected screens, primary first.
     fn screens(&self) -> Vec<Screen>;
+    /// Identifies the workspace in front, if that can be told.
+    fn workspace(&self) -> Option<String>;
     fn read(&self) -> Result<Backdrop, DesktopError>;
     /// Shows one picture per screen. Each picture must already have the size of its screen.
-    fn apply(&self, pictures: &[(String, PathBuf)]) -> Result<(), DesktopError>;
+    /// Changes nothing unless `workspace` is in front.
+    fn apply(
+        &self,
+        pictures: &[(String, PathBuf)],
+        workspace: Option<&str>,
+    ) -> Result<(), DesktopError>;
+    /// Changes nothing unless the workspace of `backdrop` is in front.
     fn restore(&self, backdrop: &Backdrop) -> Result<(), DesktopError>;
 }
