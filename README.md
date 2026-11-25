@@ -4,6 +4,14 @@ App đổi hình nền cho Windows 10 và 11: nhẹ, mở nhanh, tự tìm ảnh
 
 > Đang phát triển, chưa có bản phát hành. Mới thử trên Windows 11, chưa thử Windows 10.
 
+![Duyệt ảnh: lưới hình nền, tìm kiếm và bộ lọc](docs/images/browse.png)
+
+| Xem trước trên màn hình của bạn | Đổi hình nền mỗi ngày |
+|---|---|
+| ![Xem trước ảnh trong khung màn hình, kèm đánh giá độ vừa](docs/images/preview.png) | ![Bảng cài đặt đổi hình nền mỗi ngày](docs/images/daily.png) |
+
+Giao diện thật; các hình nền trong ảnh do chương trình tự vẽ để minh họa.
+
 ## Đã có
 
 - Duyệt ảnh từ [Wallhaven](https://wallhaven.cc): tìm kiếm, sắp xếp, lọc theo danh mục và màu. Chỉ lấy ảnh SFW, không cần tài khoản

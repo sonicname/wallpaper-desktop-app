@@ -34,6 +34,12 @@ cargo run --release --example offscreen -- bench 3840 2100 1.5  # đo thời gia
 cargo run --release --example offscreen -- wallpaper 10         # đổi hình nền thật 10 giây rồi hoàn tác
 ```
 
+Ảnh trong README ở gốc repo được tạo lại bằng lệnh sau. Hình nền trong ảnh do chương trình tự vẽ, vì ảnh từ các nguồn có bản quyền:
+
+```sh
+cargo run --release --example readme -- ../docs/images
+```
+
 Dữ liệu của app nằm ở `%LOCALAPPDATA%\WallpaperDesktop`: `thumbs` và `originals` là cache, `daily` chứa cài đặt và hàng đợi đổi hằng ngày, `pictures` chứa hình nền đang dùng và lịch sử hoàn tác. Xóa `pictures` sẽ mất lịch sử hoàn tác và có thể mất ảnh đang hiện.
 
 ## Thêm nguồn ảnh
