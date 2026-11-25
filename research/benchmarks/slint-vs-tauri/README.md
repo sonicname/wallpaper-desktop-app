@@ -51,9 +51,22 @@ Dòng `frames` trong `window-2-rounds.txt` đếm callback animation trong app, 
 - Software renderer không có kính mờ (`backdrop-blur`), xoay hay scale phần tử. Bo góc, đổ bóng và tiếng Việt có dấu đã thử và hiển thị đúng.
 - Cuộn khi phóng to ở 1440p đã dùng hết một nhân CPU, nên cần đo 4K sớm. Skia là lối thoát nhưng tốn khoảng 270 MB.
 - FemtoVG giữ 73–81 MB trong tray sau khi đóng cửa sổ, không hợp với app chạy nền.
-- Giấy phép Slint: GPLv3, hoặc royalty-free có ghi công (`AboutSlint` hoặc badge). Cần chọn trước khi phát hành.
+- Giấy phép Slint: GPLv3, hoặc royalty-free có ghi công (`AboutSlint` hoặc badge). Đã chọn GPLv3 (25/11/2026).
 - Build cần toolchain MSVC. Toolchain GNU mặc định trên máy thiếu assembler và dừng ở lỗi `dlltool: CreateProcess`.
 - `set_maximized(true)` ngay sau `show()` không có tác dụng trong phép thử này; gọi trễ 150 ms thì được.
+
+## Đo lại với giao diện thật, gồm 4K (25/11/2026)
+
+App trong `project/` cắt ảnh sẵn đúng số pixel của ô và bo góc sẵn, nên khi cuộn renderer chỉ chép pixel. Đo bằng `offscreen bench`: vẽ vào bộ nhớ, ảnh Wallhaven thật, 600 bước cuộn 10 px, cùng máy.
+
+| Kích thước | Trung vị | p95 | p99 |
+|---|---|---|---|
+| 1280×820 | 1,0 ms | 1,5 ms | 1,9 ms |
+| 2560×1369 | 3,3 ms | 4,7 ms | 5,5 ms |
+| 3840×2100, scale 100% | 8,3 ms | 10,8 ms | 12,4 ms |
+| 3840×2100, scale 150% (3 lần) | 7,9–9,3 ms | 10,2–12,0 ms | 11,3–13,4 ms |
+
+Ngân sách mỗi khung hình là 16,7 ms ở 60 Hz và 6,9 ms ở 144 Hz. Vì vậy phần vẽ đủ nhanh cho 1440p 144 Hz và 4K 60 Hz, không đủ cho 4K 144 Hz. Số này **không gồm** bước đưa ảnh lên màn hình của Windows, nên không so trực tiếp với các bảng trên. Chưa thử trên màn 4K thật hay CPU yếu.
 
 ## Chạy lại
 

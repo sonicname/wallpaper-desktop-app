@@ -1,0 +1,182 @@
+import { Theme } from "theme.slint";
+
+export component Icon inherits Path {
+    in property <color> color: Theme.muted;
+    width: 16px;
+    height: 16px;
+    viewbox-width: 16;
+    viewbox-height: 16;
+    stroke: color;
+    stroke-width: 1.5px;
+    fill: transparent;
+}
+
+component Pressable inherits Rectangle {
+    in property <bool> enabled: true;
+    in property <string> label;
+    in property <bool> checkable;
+    in property <bool> checked;
+    out property <bool> hovered: touch.has-hover && enabled;
+    out property <bool> focused: focus.has-focus;
+    callback activated();
+
+    accessible-role: button;
+    accessible-label: label;
+    accessible-checkable: checkable;
+    accessible-checked: checked;
+    accessible-enabled: enabled;
+    accessible-action-default => { if (enabled) { activated(); } }
+
+    focus := FocusScope {
+        enabled: root.enabled;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == " ") {
+                root.activated();
+                return accept;
+            }
+            return reject;
+        }
+    }
+
+    @children
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.activated(); }
+    }
+}
+
+export component Chip inherits Pressable {
+    in property <string> text;
+    // Filters that are usually on, so that they do not compete with the pictures.
+    in property <bool> quiet;
+    label: text;
+    checkable: true;
+    height: 32px;
+    horizontal-stretch: 0;
+    min-width: caption.preferred-width + 28px;
+    border-radius: 16px;
+    border-width: 1px;
+    border-color: root.focused ? Theme.text : root.checked && !root.quiet ? Theme.accent : root.checked ? Theme.muted : Theme.line;
+    background: root.checked && !root.quiet ? Theme.accent : root.hovered || root.checked ? Theme.raised : Theme.background;
+    animate background { duration: Theme.quick; }
+
+    caption := Text {
+        text: root.text;
+        color: root.checked && !root.quiet ? Theme.on-accent : root.checked ? Theme.text : Theme.muted;
+        font-size: 13px;
+        font-weight: root.checked && !root.quiet ? 600 : 400;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+export component Swatch inherits Pressable {
+    in property <color> shade;
+    checkable: true;
+    width: 30px;
+    height: 32px;
+
+    Rectangle {
+        width: root.checked || root.hovered ? 24px : 20px;
+        height: self.width;
+        border-radius: self.width / 2;
+        background: root.shade;
+        border-width: root.checked || root.focused ? 2px : 1px;
+        border-color: root.checked || root.focused ? Theme.text : Theme.line;
+        animate width { duration: Theme.quick; }
+    }
+}
+
+export component Button inherits Pressable {
+    in property <string> text;
+    in property <bool> primary;
+    label: text;
+    height: 40px;
+    border-radius: 8px;
+    border-width: root.focused ? 2px : 0px;
+    border-color: Theme.text;
+    background: !root.enabled ? Theme.raised : root.primary ? (root.hovered ? Theme.accent.brighter(12%) : Theme.accent) : (root.hovered ? Theme.line : Theme.raised);
+    animate background { duration: Theme.quick; }
+
+    Text {
+        text: root.text;
+        color: !root.enabled ? Theme.muted : root.primary ? Theme.on-accent : Theme.text;
+        font-size: 14px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+export component IconButton inherits Pressable {
+    in property <string> commands;
+    width: 40px;
+    height: 40px;
+    border-radius: 20px;
+    border-width: root.focused ? 2px : 0px;
+    border-color: Theme.text;
+    background: root.hovered ? Theme.line : Theme.raised;
+    animate background { duration: Theme.quick; }
+
+    Icon {
+        commands: root.commands;
+        color: root.enabled ? Theme.text : Theme.line;
+    }
+}
+
+export component SearchField inherits Rectangle {
+    in property <string> placeholder;
+    out property <string> text <=> input.text;
+    callback submitted(string);
+
+    height: 40px;
+    border-radius: 20px;
+    border-width: 1px;
+    border-color: input.has-focus ? Theme.accent : Theme.line;
+    background: Theme.surface;
+
+    Icon {
+        x: 14px;
+        commands: "M 7 2 A 5 5 0 1 0 7 12 A 5 5 0 1 0 7 2 M 11 11 L 14.5 14.5";
+    }
+
+    if input.text == "": Text {
+        x: 40px;
+        text: root.placeholder;
+        color: Theme.muted;
+        font-size: 14px;
+        vertical-alignment: center;
+        height: 100%;
+    }
+
+    input := TextInput {
+        x: 40px;
+        width: parent.width - 80px;
+        height: 100%;
+        vertical-alignment: center;
+        single-line: true;
+        color: Theme.text;
+        font-size: 14px;
+        selection-background-color: Theme.accent;
+        selection-foreground-color: Theme.on-accent;
+        accessible-role: text-input;
+        accessible-label: root.placeholder;
+        accepted => { root.submitted(self.text); }
+    }
+
+    if input.text != "": TouchArea {
+        x: parent.width - 36px;
+        width: 32px;
+        mouse-cursor: pointer;
+        accessible-role: button;
+        accessible-label: "Xóa từ khóa";
+        clicked => {
+            input.text = "";
+            root.submitted("");
+        }
+        Icon { commands: "M 4 4 L 12 12 M 12 4 L 4 12"; color: parent.has-hover ? Theme.text : Theme.muted; }
+    }
+}

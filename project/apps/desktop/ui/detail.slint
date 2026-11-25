@@ -1,0 +1,178 @@
+import { Theme } from "theme.slint";
+import { Button, IconButton } from "controls.slint";
+
+export struct Detail {
+    resolution: string,
+    fit-title: string,
+    fit-note: string,
+    fit-good: bool,
+    file: string,
+    source: string,
+    tint: color,
+    palette: [color],
+}
+
+component Fact inherits VerticalLayout {
+    in property <string> name;
+    in property <string> value;
+    spacing: 2px;
+    Text { text: name; color: Theme.muted; font-size: 12px; }
+    Text { text: value; color: Theme.text; font-size: 14px; wrap: word-wrap; }
+}
+
+export component DetailView inherits Rectangle {
+    in property <Detail> detail;
+    in property <image> picture;
+    in property <bool> has-picture;
+    in property <bool> sharp;
+    in property <float> screen-aspect: 1.7778;
+    in property <string> screen-name;
+    out property <length> picture-width: frame.width - 2 * bezel;
+    out property <length> picture-height: frame.height - 2 * bezel;
+    property <length> bezel: 8px;
+    property <length> panel: 320px;
+    property <length> room-width: root.width - panel - 128px;
+    property <length> room-height: root.height - 150px;
+    callback close();
+    callback step(int);
+    callback open-source();
+    public function take-focus() { keys.focus(); }
+
+    background: Theme.background;
+    // Swallows clicks and scrolling meant for the grid underneath.
+    TouchArea { scroll-event => { accept } }
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) { root.close(); return accept; }
+            if (event.text == Key.LeftArrow) { root.step(-1); return accept; }
+            if (event.text == Key.RightArrow) { root.step(1); return accept; }
+            return reject;
+        }
+    }
+
+    Rectangle {
+        x: 0;
+        width: root.width - panel;
+
+        // The picture is cropped exactly the way the screen would crop it.
+        frame := Rectangle {
+            width: min(room-width, (room-height - 2 * bezel) * screen-aspect + 2 * bezel);
+            height: (self.width - 2 * bezel) / screen-aspect + 2 * bezel;
+            y: (parent.height - self.height - 44px) / 2;
+            border-radius: 14px;
+            background: #050506;
+            border-width: 1px;
+            border-color: Theme.line;
+
+            Rectangle {
+                width: parent.width - 2 * bezel;
+                height: parent.height - 2 * bezel;
+                background: detail.tint;
+                if has-picture: Image {
+                    width: 100%;
+                    height: 100%;
+                    source: picture;
+                    image-fit: cover;
+                }
+                if !sharp: Rectangle {
+                    x: parent.width - self.width - 12px;
+                    y: parent.height - self.height - 12px;
+                    width: wait.preferred-width + 20px;
+                    height: 26px;
+                    border-radius: 13px;
+                    background: #0b0c0ee0;
+                    wait := Text { text: "Đang tải ảnh gốc…"; color: Theme.text; font-size: 12px; }
+                }
+            }
+        }
+        // Stand.
+        Rectangle {
+            y: frame.y + frame.height;
+            width: 72px;
+            height: 22px;
+            background: #17191d;
+        }
+        Rectangle {
+            y: frame.y + frame.height + 22px;
+            width: 180px;
+            height: 5px;
+            border-radius: 2.5px;
+            background: Theme.line;
+        }
+        Text {
+            y: frame.y + frame.height + 36px;
+            text: "Xem trước trên màn hình " + screen-name;
+            color: Theme.muted;
+            font-size: 12px;
+        }
+        IconButton {
+            x: 12px;
+            label: "Ảnh trước";
+            commands: "M 10 3 L 5 8 L 10 13";
+            activated => { root.step(-1); }
+        }
+        IconButton {
+            x: parent.width - 52px;
+            label: "Ảnh sau";
+            commands: "M 6 3 L 11 8 L 6 13";
+            activated => { root.step(1); }
+        }
+    }
+
+    Rectangle {
+        x: root.width - panel;
+        width: panel;
+        background: Theme.surface;
+
+        IconButton {
+            x: parent.width - 56px;
+            y: 16px;
+            label: "Đóng";
+            commands: "M 3.5 3.5 L 12.5 12.5 M 12.5 3.5 L 3.5 12.5";
+            activated => { root.close(); }
+        }
+
+        VerticalLayout {
+            padding: 28px;
+            padding-top: 76px;
+            spacing: 22px;
+
+            Text { text: detail.resolution; color: Theme.text; font-size: 28px; font-weight: 600; }
+
+            VerticalLayout {
+                spacing: 4px;
+                Text {
+                    text: detail.fit-title;
+                    color: detail.fit-good ? Theme.accent : Theme.danger;
+                    font-size: 15px;
+                    font-weight: 600;
+                    wrap: word-wrap;
+                }
+                Text { text: detail.fit-note; color: Theme.muted; font-size: 13px; wrap: word-wrap; }
+            }
+
+            if detail.palette.length > 0: HorizontalLayout {
+                height: 36px;
+                for shade in detail.palette: Rectangle { background: shade; }
+            }
+
+            Fact { name: "Tệp"; value: detail.file; }
+            Fact { name: "Nguồn"; value: detail.source; }
+
+            Rectangle { vertical-stretch: 1; }
+
+            VerticalLayout {
+                spacing: 10px;
+                Button { text: "Đặt làm hình nền (sắp có)"; primary: true; enabled: false; }
+                Button { text: "Mở trang gốc"; activated => { root.open-source(); } }
+                Text {
+                    text: "Bản quyền ảnh thuộc về tác giả.";
+                    color: Theme.muted;
+                    font-size: 12px;
+                    horizontal-alignment: center;
+                }
+            }
+        }
+    }
+}

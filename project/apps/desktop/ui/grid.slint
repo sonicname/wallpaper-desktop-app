@@ -1,0 +1,93 @@
+import { ListView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+
+export struct Cell {
+    index: int,
+    x: length,
+    width: length,
+    image: image,
+    ready: bool,
+    tint: color,
+    label: string,
+}
+
+export struct Row {
+    height: length,
+    cells: [Cell],
+}
+
+component CellView inherits Rectangle {
+    in property <Cell> cell;
+    callback activated();
+
+    accessible-role: button;
+    accessible-label: "Hình nền " + cell.label;
+    accessible-action-default => { activated(); }
+
+    if !cell.ready: Rectangle {
+        border-radius: Theme.radius;
+        background: cell.tint;
+    }
+    // The picture already has the size and rounded corners of the cell.
+    if cell.ready: Image {
+        width: 100%;
+        height: 100%;
+        source: cell.image;
+        image-fit: fill;
+    }
+    if touch.has-hover: Rectangle {
+        border-radius: Theme.radius;
+        border-width: 2px;
+        border-color: Theme.accent;
+
+        Rectangle {
+            x: 10px;
+            y: parent.height - self.height - 10px;
+            width: caption.preferred-width + 20px;
+            height: 26px;
+            border-radius: 13px;
+            background: #0b0c0ee0;
+            caption := Text {
+                text: cell.label;
+                color: Theme.text;
+                font-size: 12px;
+            }
+        }
+    }
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.activated(); }
+    }
+}
+
+export component Grid inherits Rectangle {
+    in property <[Row]> rows;
+    in property <length> gap;
+    in property <bool> busy;
+    in-out property <length> scroll <=> list.content-y;
+    out property <length> inner-width: list.visible-width - 16px;
+    callback activated(int);
+
+    list := ListView {
+        for row in root.rows: Rectangle {
+            height: row.height + root.gap;
+            for cell in row.cells: CellView {
+                x: cell.x;
+                y: 0;
+                width: cell.width;
+                height: row.height;
+                cell: cell;
+                activated => { root.activated(cell.index); }
+            }
+        }
+    }
+
+    if root.busy: Rectangle {
+        property <float> phase: mod(animation-tick(), 1200ms) / 1200ms;
+        y: 0;
+        x: -self.width + (parent.width + self.width) * phase;
+        width: parent.width * 30%;
+        height: 2px;
+        background: Theme.accent;
+    }
+}
