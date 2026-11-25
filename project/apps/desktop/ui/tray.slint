@@ -1,0 +1,33 @@
+export component Tray inherits SystemTrayIcon {
+    in property <image> picture;
+    in property <string> status;
+    in property <bool> shown;
+    in property <bool> paused;
+    in property <bool> busy;
+    in property <bool> can-undo;
+    callback open();
+    callback next();
+    callback previous();
+    callback block();
+    callback toggle-paused();
+    callback quit();
+
+    icon: picture;
+    tooltip: status;
+    visible: shown;
+    clicked => { root.open(); }
+
+    Menu {
+        MenuItem { title: "Mở"; activated => { root.open(); } }
+        MenuSeparator { }
+        MenuItem { title: "Ảnh tiếp theo"; enabled: !root.busy; activated => { root.next(); } }
+        MenuItem { title: "Ảnh trước"; enabled: !root.busy && root.can-undo; activated => { root.previous(); } }
+        MenuItem { title: "Không hiện lại ảnh này"; enabled: !root.busy; activated => { root.block(); } }
+        MenuSeparator { }
+        MenuItem {
+            title: root.paused ? "Tiếp tục đổi hằng ngày" : "Tạm dừng đổi hằng ngày";
+            activated => { root.toggle-paused(); }
+        }
+        MenuItem { title: "Thoát"; activated => { root.quit(); } }
+    }
+}

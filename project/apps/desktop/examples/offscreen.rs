@@ -21,7 +21,7 @@ use std::{
 use slint::{ComponentHandle, LogicalPosition, Model, platform::WindowEvent};
 use stage::Stage;
 use wallpaper_desktop::{App, AppWindow, Config};
-use wallpaper_platform_windows::WindowsDesktop;
+use wallpaper_platform_windows::{WindowsDesktop, WindowsSystem};
 use wallpaper_provider_wallhaven::Wallhaven;
 
 fn save(stage: &Stage, path: &Path) {
@@ -72,11 +72,13 @@ fn main() {
     let app = App::new(Config {
         provider: Arc::new(Wallhaven),
         desktop: Arc::new(WindowsDesktop),
+        // Never added to the startup list, because nothing here switches it on.
+        system: Arc::new(WindowsSystem::new("WallpaperOffscreen", String::new())),
         data_dir: Some(env::temp_dir().join("wallpaper-offscreen")),
     })
     .unwrap();
     let window = app.window().clone_strong();
-    window.show().unwrap();
+    app.open().unwrap();
     let visible = (height as f32 / scale / 200.0).ceil() as usize;
     let loaded = stage.run_until(Duration::from_secs(60), || ready(&window, visible));
     println!(
@@ -151,6 +153,38 @@ fn run_shots(stage: &mut Stage, window: &AppWindow, folder: &Path) {
     stage.run_for(Duration::from_millis(300));
     save(stage, &folder.join("undo.png"));
     window.set_toast("".into());
+
+    // Filled in by hand: switching it on for real would change the wallpaper.
+    let options = |labels: &[&str], on: usize| {
+        let all: Vec<_> = labels
+            .iter()
+            .enumerate()
+            .map(|(i, l)| option(l, i == on))
+            .collect();
+        slint::ModelRc::new(slint::VecModel::from(all))
+    };
+    window.set_daily(wallpaper_desktop::DailyState {
+        enabled: true,
+        paused: false,
+        hour: "08:00".into(),
+        status: "Đã đổi hôm nay. Có sẵn 3 ảnh.".into(),
+        problem: false,
+        autostart: true,
+        autostart_note: "App chạy ẩn dưới khay sau khi đăng nhập.".into(),
+        sorts: options(&["Ngẫu nhiên", "Nổi bật", "Mới nhất", "Yêu thích nhất"], 1),
+        categories: options(&["Tổng hợp", "Anime", "Con người"], 0),
+    });
+    window.set_daily_open(true);
+    stage.run_for(Duration::from_millis(300));
+    save(stage, &folder.join("daily.png"));
+    let mut off = window.get_daily();
+    off.enabled = false;
+    off.autostart = false;
+    off.autostart_note = "Cần bật tự đổi mỗi ngày trước.".into();
+    window.set_daily(off);
+    stage.run_for(Duration::from_millis(300));
+    save(stage, &folder.join("daily-off.png"));
+    window.set_daily_open(false);
 
     window.invoke_search("zzqqxxyyzz no such picture".into());
     stage.run_until(Duration::from_secs(40), || !window.get_busy());

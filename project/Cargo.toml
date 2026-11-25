@@ -10,6 +10,7 @@ publish = false
 
 [workspace.dependencies]
 wallpaper-core = { path = "packages/core" }
+wallpaper-daily = { path = "packages/daily" }
 wallpaper-host = { path = "packages/host" }
 wallpaper-platform-windows = { path = "packages/platform-windows" }
 wallpaper-provider-wallhaven = { path = "packages/provider-wallhaven" }

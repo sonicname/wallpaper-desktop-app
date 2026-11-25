@@ -1,6 +1,8 @@
 //! Vietnamese wording for values that come from providers.
 
-use wallpaper_core::{BackdropMode, Category, DesktopError, ProviderError, Rgb, Size, Sort, fit};
+use wallpaper_core::{
+    Autostart, BackdropMode, Category, DesktopError, ProviderError, Rgb, Size, Sort, fit,
+};
 
 use crate::apply::ApplyError;
 
@@ -75,6 +77,18 @@ pub fn mode_warning(mode: BackdropMode) -> &'static str {
             "Windows đang dùng Spotlight. Đặt ảnh sẽ tắt Spotlight và hoàn tác không bật lại được."
         }
         _ => "Windows đang trình chiếu. Đặt ảnh sẽ tắt trình chiếu và hoàn tác không bật lại được.",
+    }
+}
+
+pub fn clock(minutes: u32) -> String {
+    format!("{:02}:{:02}", minutes / 60, minutes % 60)
+}
+
+pub fn autostart(state: Autostart, daily: bool) -> &'static str {
+    match state {
+        Autostart::Blocked => "Windows đang chặn. Bật lại trong Task Manager, mục Startup apps.",
+        Autostart::Off if !daily => "Cần bật tự đổi mỗi ngày trước.",
+        Autostart::Off | Autostart::On => "App chạy ẩn dưới khay sau khi đăng nhập.",
     }
 }
 

@@ -51,6 +51,12 @@ pub fn apply(
         };
         wanted.push((screen.id.clone(), path));
     }
+    show(wanted, place)
+}
+
+/// Shows pictures that are in the gallery already. The desktop is unchanged if this fails,
+/// except for [`DesktopError::WorkspaceSwitched`].
+pub fn show(wanted: Vec<(String, PathBuf)>, place: &Place) -> Result<(), ApplyError> {
     // The download can take a while, and the user may have moved on in the meantime.
     let before = place.desktop.read().map_err(ApplyError::Desktop)?;
     if before.workspace.as_deref() != place.workspace {

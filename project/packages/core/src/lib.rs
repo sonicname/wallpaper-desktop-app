@@ -4,6 +4,7 @@ mod desktop;
 mod fit;
 mod model;
 mod provider;
+mod system;
 
 pub use desktop::{Backdrop, BackdropMode, Desktop, DesktopError, Picture, Screen};
 pub use fit::{Fit, Ratio, fit};
@@ -11,3 +12,4 @@ pub use model::{Category, Cursor, Item, Page, Rgb, Size, Sort, Thumb, ThumbCrop}
 pub use provider::{
     Capabilities, Http, ListRequest, Provider, ProviderError, ProviderInfo, RateLimit,
 };
+pub use system::{Autostart, LocalTime, System};

@@ -4,9 +4,10 @@ Cargo workspace chứa toàn bộ source code. Giấy phép: GPL-3.0-only (xem [
 
 - `apps/desktop`: app Windows, giao diện Slint (software renderer)
 - `packages/core`: kiểu dữ liệu, trait `Provider`, tính độ vừa màn hình. Không có UI, mạng hay API hệ điều hành
+- `packages/daily`: lịch đổi hằng ngày, hàng đợi ảnh, chống lặp. Chi tiết ở [docs/daily-random.md](../docs/daily-random.md)
 - `packages/host`: HTTP, rate limit, cache đĩa, giải mã và cắt ảnh, lịch sử hoàn tác hình nền
 - `packages/provider-wallhaven`: nguồn ảnh Wallhaven (chỉ SFW, không cần key)
-- `packages/platform-windows`: đọc màn hình và virtual desktop, đặt và trả lại hình nền, mở link. Chi tiết ở [docs/windows-wallpaper.md](../docs/windows-wallpaper.md)
+- `packages/platform-windows`: đọc màn hình và virtual desktop, đặt và trả lại hình nền, khởi động cùng Windows, chỉ chạy một bản, mở link. Chi tiết ở [docs/windows-wallpaper.md](../docs/windows-wallpaper.md)
 
 Chỉ build được trên Windows. Cần Visual Studio Build Tools với workload "Desktop development with C++". `rust-toolchain.toml` tự chọn toolchain MSVC cho riêng folder này.
 
@@ -33,7 +34,13 @@ cargo run --release --example offscreen -- bench 3840 2100 1.5  # đo thời gia
 cargo run --release --example offscreen -- wallpaper 10         # đổi hình nền thật 10 giây rồi hoàn tác
 ```
 
-Dữ liệu của app nằm ở `%LOCALAPPDATA%\WallpaperDesktop`: `thumbs` và `originals` là cache, `pictures` chứa hình nền đang dùng và lịch sử hoàn tác. Xóa `pictures` sẽ mất lịch sử hoàn tác và có thể mất ảnh đang hiện.
+Ảnh trong README ở gốc repo được tạo lại bằng lệnh sau. Hình nền trong ảnh do chương trình tự vẽ, vì ảnh từ các nguồn có bản quyền:
+
+```sh
+cargo run --release --example readme -- ../docs/images
+```
+
+Dữ liệu của app nằm ở `%LOCALAPPDATA%\WallpaperDesktop`: `thumbs` và `originals` là cache, `daily` chứa cài đặt và hàng đợi đổi hằng ngày, `pictures` chứa hình nền đang dùng và lịch sử hoàn tác. Xóa `pictures` sẽ mất lịch sử hoàn tác và có thể mất ảnh đang hiện.
 
 ## Thêm nguồn ảnh
 
