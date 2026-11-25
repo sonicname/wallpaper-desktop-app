@@ -1,0 +1,22 @@
+import { ListView } from "std-widgets.slint";
+export component App inherits Window {
+    title: "bench-window"; preferred-width: 1200px; preferred-height: 800px; background: #16181d; always-on-top: true;
+    in property <[[image]]> rows;
+    in property <bool> scrolling;
+    callback frame();
+    in property <string> label;
+    property <duration> tick: scrolling ? animation-tick() : 0ms;
+    property <duration> start;
+    changed tick => {
+        if (scrolling) { if (start == 0ms) { start = tick; }
+            lv.viewport-y = -((tick - start) / 1ms) * 1.5px; root.frame(); }
+    }
+    if label != "": Rectangle { z: 5; x: 40px; y: 30px; width: 620px; height: 90px; border-radius: 12px; background: #000000b0; drop-shadow-blur: 24px; drop-shadow-color: #000; Text { text: label; color: white; font-size: 24px; } }
+    lv := ListView {
+        for row in rows: HorizontalLayout {
+            height: 200px; padding: 8px; spacing: 12px;
+            for img in row: Rectangle { border-radius: 10px; clip: true; background: #23262e;
+                Image { source: img; width: 100%; height: 100%; image-fit: cover; } }
+        }
+    }
+}

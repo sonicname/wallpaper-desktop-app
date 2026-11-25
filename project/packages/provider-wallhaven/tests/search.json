@@ -1,0 +1,74 @@
+{
+  "data": [
+    {
+      "id": "aaaaa1",
+      "url": "https://wallhaven.cc/w/aaaaa1",
+      "purity": "sfw",
+      "category": "general",
+      "dimension_x": 2560,
+      "dimension_y": 1440,
+      "resolution": "2560x1440",
+      "ratio": "1.78",
+      "file_size": 385113,
+      "file_type": "image/jpeg",
+      "colors": [
+        "#424153",
+        "#000000"
+      ],
+      "path": "https://w.wallhaven.cc/full/aa/wallhaven-aaaaa1.jpg",
+      "thumbs": {
+        "large": "https://th.wallhaven.cc/lg/aa/aaaaa1.jpg",
+        "original": "https://th.wallhaven.cc/orig/aa/aaaaa1.jpg",
+        "small": "https://th.wallhaven.cc/small/aa/aaaaa1.jpg"
+      }
+    },
+    {
+      "id": "aaaaa2",
+      "url": "https://wallhaven.cc/w/aaaaa2",
+      "purity": "sketchy",
+      "category": "general",
+      "dimension_x": 3840,
+      "dimension_y": 2160,
+      "resolution": "3840x2160",
+      "ratio": "1.78",
+      "file_size": 385113,
+      "file_type": "image/jpeg",
+      "colors": [],
+      "path": "https://w.wallhaven.cc/full/aa/wallhaven-aaaaa2.jpg",
+      "thumbs": {
+        "large": "https://th.wallhaven.cc/lg/aa/aaaaa2.jpg",
+        "original": "https://th.wallhaven.cc/orig/aa/aaaaa2.jpg",
+        "small": "https://th.wallhaven.cc/small/aa/aaaaa2.jpg"
+      }
+    },
+    {
+      "id": "aaaaa3",
+      "url": "https://wallhaven.cc/w/aaaaa3",
+      "purity": "sfw",
+      "category": "general",
+      "dimension_x": 2160,
+      "dimension_y": 3840,
+      "resolution": "2160x3840",
+      "ratio": "0.56",
+      "file_size": 385113,
+      "file_type": "image/jpeg",
+      "colors": [
+        "#333399"
+      ],
+      "path": "https://w.wallhaven.cc/full/aa/wallhaven-aaaaa3.jpg",
+      "thumbs": {
+        "large": "https://th.wallhaven.cc/lg/aa/aaaaa3.jpg",
+        "original": "https://th.wallhaven.cc/orig/aa/aaaaa3.jpg",
+        "small": "https://th.wallhaven.cc/small/aa/aaaaa3.jpg"
+      }
+    }
+  ],
+  "meta": {
+    "current_page": 1,
+    "last_page": 9,
+    "per_page": 24,
+    "total": 200,
+    "query": null,
+    "seed": null
+  }
+}

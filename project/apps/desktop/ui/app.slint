@@ -1,0 +1,225 @@
+import { Theme } from "theme.slint";
+import { Button, Chip, IconButton, SearchField, Swatch } from "controls.slint";
+import { Cell, Grid, Row } from "grid.slint";
+import { Detail, DetailView, Option } from "detail.slint";
+
+export { Cell, Row, Detail, Option }
+
+export struct Shade {
+    color: color,
+    name: string,
+    on: bool,
+}
+
+export component AppWindow inherits Window {
+    title: "Wallpaper";
+    preferred-width: 1280px;
+    preferred-height: 820px;
+    min-width: 1120px;
+    min-height: 600px;
+    background: Theme.background;
+    default-font-family: "Segoe UI";
+
+    in property <bool> can-search;
+    in property <[Option]> sorts;
+    in property <[Option]> categories;
+    in property <[Shade]> shades;
+    in property <Option> screen-fit;
+    in property <string> screen-name;
+    in property <float> screen-aspect: 1.7778;
+
+    in property <[Row]> rows;
+    in property <length> gap;
+    in property <bool> busy;
+    in property <string> summary;
+    in property <string> message;
+    in property <bool> can-retry;
+    in-out property <length> scroll;
+    out property <length> grid-width: grid.inner-width;
+    out property <length> grid-height: grid.height;
+
+    in-out property <bool> detail-open;
+    in property <Detail> detail;
+    in property <image> picture;
+    in property <bool> has-picture;
+    in property <bool> picture-sharp;
+    out property <length> picture-width: detail-view.picture-width;
+    out property <length> picture-height: detail-view.picture-height;
+
+    callback search(string);
+    callback pick-sort(int);
+    callback pick-category(int);
+    callback pick-shade(int);
+    callback toggle-screen-fit();
+    callback layout-changed();
+    callback retry();
+    callback open(int);
+    callback step(int);
+    callback open-source();
+
+    in property <[Option]> targets;
+    in property <string> mode-warning;
+    in property <bool> can-apply;
+    in property <bool> changing;
+    in property <bool> can-undo;
+    in property <string> toast;
+    callback pick-target(int);
+    callback apply();
+    callback undo();
+    callback close-toast();
+
+    changed grid-width => { layout-changed(); }
+    changed grid-height => { layout-changed(); }
+
+    VerticalLayout {
+        padding: 20px;
+        padding-bottom: 0;
+        spacing: 12px;
+
+        HorizontalLayout {
+            spacing: 16px;
+            height: 40px;
+            SearchField {
+                visible: can-search;
+                min-width: 240px;
+                max-width: 420px;
+                horizontal-stretch: 1;
+                placeholder: "Tìm hình nền, ví dụ: mountain, city night";
+                submitted(text) => { root.search(text); }
+            }
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: center;
+                padding-top: 4px;
+                padding-bottom: 4px;
+                for option[i] in sorts: Chip {
+                    text: option.label;
+                    checked: option.on;
+                    activated => { root.pick-sort(i); }
+                }
+            }
+            Text {
+                text: summary;
+                color: Theme.muted;
+                font-size: 13px;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+                overflow: elide;
+            }
+        }
+
+        HorizontalLayout {
+            spacing: 8px;
+            height: 32px;
+            if screen-fit.label != "": Chip {
+                quiet: true;
+                text: screen-fit.label;
+                checked: screen-fit.on;
+                activated => { root.toggle-screen-fit(); }
+            }
+            if screen-fit.label != "": Rectangle { width: 1px; background: Theme.line; }
+            for option[i] in categories: Chip {
+                text: option.label;
+                quiet: true;
+                checked: option.on;
+                activated => { root.pick-category(i); }
+            }
+            if shades.length > 0: Rectangle { width: 1px; background: Theme.line; }
+            HorizontalLayout {
+                for shade[i] in shades: Swatch {
+                    shade: shade.color;
+                    label: shade.name;
+                    checked: shade.on;
+                    activated => { root.pick-shade(i); }
+                }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            if can-undo: Button {
+                height: 32px;
+                width: 160px;
+                small: true;
+                text: "Hoàn tác hình nền";
+                enabled: !changing;
+                activated => { root.undo(); }
+            }
+        }
+
+        Rectangle {
+            vertical-stretch: 1;
+            grid := Grid {
+                width: 100%;
+                height: 100%;
+                rows: root.rows;
+                gap: root.gap;
+                busy: root.busy;
+                scroll <=> root.scroll;
+                activated(index) => { root.open(index); }
+            }
+            if message != "": VerticalLayout {
+                alignment: center;
+                spacing: 16px;
+                Text {
+                    text: message;
+                    color: Theme.text;
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+                if can-retry: HorizontalLayout {
+                    alignment: center;
+                    Button { width: 140px; text: "Thử lại"; primary: true; activated => { root.retry(); } }
+                }
+            }
+        }
+    }
+
+    // Stays instantiated so that Rust can read the picture size, but is only shown when open.
+    detail-view := DetailView {
+        visible: detail-open;
+        x: detail-open ? 0px : root.width * 2;
+        width: root.width;
+        height: root.height;
+        detail: root.detail;
+        picture: root.picture;
+        has-picture: root.has-picture;
+        sharp: root.picture-sharp;
+        screen-aspect: root.screen-aspect;
+        screen-name: root.screen-name;
+        targets: root.targets;
+        warning: root.mode-warning;
+        can-apply: root.can-apply;
+        changing: root.changing;
+        pick-target(i) => { root.pick-target(i); }
+        apply => { root.apply(); }
+        close => { root.detail-open = false; }
+        step(by) => { root.step(by); }
+        open-source => { root.open-source(); }
+    }
+    if toast != "": Rectangle {
+        y: root.height - self.height - 24px;
+        width: message-row.preferred-width;
+        height: 56px;
+        border-radius: 12px;
+        border-width: 1px;
+        border-color: Theme.line;
+        background: Theme.raised;
+        accessible-role: text;
+        accessible-label: toast;
+        // Clicks next to the buttons must not reach what is underneath.
+        TouchArea { }
+        message-row := HorizontalLayout {
+            padding: 8px;
+            padding-left: 20px;
+            spacing: 16px;
+            Text { text: toast; color: Theme.text; font-size: 14px; vertical-alignment: center; }
+            if can-undo: Button { text: "Hoàn tác"; width: 104px; enabled: !changing; activated => { root.undo(); } }
+            IconButton {
+                label: "Ẩn thông báo";
+                commands: "M 4.5 4.5 L 11.5 11.5 M 11.5 4.5 L 4.5 11.5";
+                activated => { root.close-toast(); }
+            }
+        }
+    }
+    changed detail-open => { if (detail-open) { detail-view.take-focus(); } }
+}

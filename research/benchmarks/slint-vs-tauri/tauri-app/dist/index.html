@@ -1,0 +1,11 @@
+<!doctype html><meta charset=utf-8><style>html,body{margin:0;height:100%;background:#16181d;overflow:hidden}#v{height:100%;overflow-y:auto}#c{position:relative;height:50000px}
+.r{position:absolute;left:0;right:0;height:200px;padding:8px;gap:12px;display:flex;box-sizing:border-box}.k{flex:1;border-radius:10px;overflow:hidden;background:#23262e}.k img{width:100%;height:100%;object-fit:cover;display:block}</style>
+<div id=v><div id=c></div></div><script>
+const B='http://thumb.localhost/',v=document.getElementById('v'),c=document.getElementById('c'),live=new Map();
+function upd(){const a=Math.max(0,Math.floor(v.scrollTop/200)-1),b=Math.min(R-1,Math.ceil((v.scrollTop+v.clientHeight)/200)+1);
+for(const[k,e]of live)if(k<a||k>b){e.remove();live.delete(k)}
+for(let r=a;r<=b;r++)if(!live.has(r)){const e=document.createElement('div');e.className='r';e.style.top=r*200+'px';for(let i=0;i<N;i++){const d=document.createElement('div');d.className='k';const m=new Image();m.decoding='async';m.src=B+'t'+(r*N+i);d.append(m);e.append(d)}c.append(e);live.set(r,e)}}
+v.addEventListener('scroll',upd,{passive:true});let N=4,R=125;fetch(B+'cols').then(r=>r.text()).then(x=>{N=+x;R=125;c.style.height=R*200+'px';new ResizeObserver(upd).observe(v)});
+const L=s=>fetch(B+'log/'+s);
+fetch(B+'mode').then(r=>r.text()).then(m=>{if(m!=='scroll')return;setTimeout(()=>{L('scroll_start');const f=[];let s=0;(function t(n){if(!s)s=n;f.push(performance.now());if(n-s>1e4){L('scroll_end');L('frames '+f.slice(1).map((x,i)=>(x-f[i]).toFixed(2)).join(','));return}v.scrollTop=(n-s)*1.5;requestAnimationFrame(t)})(performance.now())},3000)})
+</script>

@@ -1,0 +1,1 @@
+{"productName":"tauri-app","version":"0.0.1","identifier":"local.bench.tauri","build":{"frontendDist":"dist"},"app":{"windows":[],"security":{"csp":null}},"bundle":{"active":true,"targets":["nsis"],"icon":["icons/icon.ico"]}}
