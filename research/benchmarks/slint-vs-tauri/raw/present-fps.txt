@@ -1,0 +1,69 @@
+# Displayed-frame counts (harness with BENCH_PRESENT=1). "last_input=0s" means the machine was in use during that run.
+
+## Window 1200x800, 4 columns, one run each
+##### win tauri
+open: procs=7 webview2=6 private=173.3MB privWS=77.7MB hostPrivate=5.5MB totalWS=337.7MB cpu=1125ms
+client=1200x800 fg=true samples/s=144 shown_fps=143.7 gap_median=6.94 p95=7.41 p99=7.72 max=14.0
+scroll: procs=7 webview2=6 private=282.8MB privWS=103.6MB hostPrivate=5.6MB totalWS=387.4MB cpu=5422ms
+scroll cpu over 6s=3453ms
+  [p] last_input=1s ago, system_cpu=12%, ac=1
+##### win sw
+open: procs=1 webview2=0 private=11.1MB privWS=10.4MB hostPrivate=11.1MB totalWS=24.8MB cpu=47ms
+client=1200x800 fg=false samples/s=144 shown_fps=142.7 gap_median=6.94 p95=7.52 p99=8.03 max=56.8
+scroll: procs=1 webview2=0 private=32.3MB privWS=31.0MB hostPrivate=32.3MB totalWS=45.4MB cpu=4000ms
+scroll cpu over 6s=3281ms
+  [p] last_input=0s ago, system_cpu=23%, ac=1
+##### win fv
+open: procs=1 webview2=0 private=118.5MB privWS=60.4MB hostPrivate=118.5MB totalWS=90.9MB cpu=375ms
+client=1200x800 fg=false samples/s=149 shown_fps=136.7 gap_median=6.96 p95=13.46 p99=14.36 max=14.8
+scroll: procs=1 webview2=0 private=151.2MB privWS=85.0MB hostPrivate=151.2MB totalWS=115.6MB cpu=1688ms
+scroll cpu over 6s=1016ms
+  [p] last_input=1s ago, system_cpu=16%, ac=1
+##### win sk
+open: procs=1 webview2=0 private=227.5MB privWS=93.7MB hostPrivate=227.5MB totalWS=138.4MB cpu=422ms
+client=1200x800 fg=false samples/s=144 shown_fps=144.2 gap_median=6.94 p95=7.49 p99=7.76 max=9.4
+scroll: procs=1 webview2=0 private=251.9MB privWS=117.2MB hostPrivate=251.9MB totalWS=161.9MB cpu=1156ms
+scroll cpu over 6s=594ms
+  [p] last_input=0s ago, system_cpu=9%, ac=1
+
+## Maximized 2560x1369, 8 columns (after the Slint maximize fix)
+##### max tauri (run 1)
+open: procs=7 webview2=6 private=229.4MB privWS=94.8MB hostPrivate=5.8MB totalWS=368.4MB cpu=1156ms
+client=2560x1369 fg=true samples/s=144 shown_fps=144.0 gap_median=6.95 p95=7.35 p99=7.58 max=11.2
+scroll: procs=7 webview2=6 private=428.4MB privWS=142.0MB hostPrivate=6.0MB totalWS=432.7MB cpu=7906ms
+scroll cpu over 6s=5578ms
+  [p] last_input=47s ago, system_cpu=12%, ac=1
+##### max sw (run 1)
+open: procs=1 webview2=0 private=32.1MB privWS=31.0MB hostPrivate=32.1MB totalWS=45.4MB cpu=156ms
+client=2560x1369 fg=true samples/s=144 shown_fps=134.0 gap_median=7.05 p95=13.32 p99=14.35 max=14.9
+scroll: procs=1 webview2=0 private=64.6MB privWS=63.3MB hostPrivate=64.6MB totalWS=77.7MB cpu=7984ms
+scroll cpu over 6s=6328ms
+  [p] last_input=68s ago, system_cpu=13%, ac=1
+##### max fv
+open: procs=1 webview2=0 private=224.0MB privWS=85.8MB hostPrivate=224.0MB totalWS=116.5MB cpu=453ms
+client=2560x1369 fg=true samples/s=152 shown_fps=124.0 gap_median=6.99 p95=14.21 p99=21.39 max=33.9
+scroll: procs=1 webview2=0 private=247.5MB privWS=117.3MB hostPrivate=247.5MB totalWS=148.0MB cpu=4047ms
+scroll cpu over 6s=2953ms
+  [p] last_input=88s ago, system_cpu=14%, ac=1
+##### max sk (other processes were loading the machine: system_cpu=65%)
+open: procs=1 webview2=0 private=239.4MB privWS=105.3MB hostPrivate=239.4MB totalWS=150.1MB cpu=891ms
+client=2560x1369 fg=true samples/s=144 shown_fps=143.7 gap_median=6.93 p95=7.56 p99=8.14 max=12.7
+scroll: procs=1 webview2=0 private=272.2MB privWS=138.2MB hostPrivate=272.2MB totalWS=183.1MB cpu=4000ms
+scroll cpu over 6s=2344ms
+  [p] last_input=111s ago, system_cpu=65%, ac=1
+##### max sw (run 2)
+open: procs=1 webview2=0 private=32.2MB privWS=31.2MB hostPrivate=32.2MB totalWS=45.6MB cpu=156ms
+client=2560x1369 fg=true samples/s=144 shown_fps=134.7 gap_median=7.04 p95=13.35 p99=14.38 max=14.7
+scroll: procs=1 webview2=0 private=64.9MB privWS=63.7MB hostPrivate=64.9MB totalWS=78.1MB cpu=7719ms
+scroll cpu over 6s=6078ms
+  [p] last_input=132s ago, system_cpu=12%, ac=1
+##### max tauri (run 2)
+open: procs=7 webview2=6 private=237.2MB privWS=96.6MB hostPrivate=5.3MB totalWS=372.5MB cpu=1188ms
+client=2560x1369 fg=true samples/s=144 shown_fps=144.0 gap_median=6.94 p95=7.27 p99=7.54 max=13.4
+scroll: procs=7 webview2=6 private=431.2MB privWS=138.1MB hostPrivate=5.8MB totalWS=430.3MB cpu=7141ms
+scroll cpu over 6s=4750ms
+  [p] last_input=152s ago, system_cpu=12%, ac=1
+
+## Installers (bytes)
+tauri (NSIS via tauri-cli): 1189624
+slint software / femtovg / skia (same makensis, LZMA solid, exe only): 4162057 / 4188536 / 6812866

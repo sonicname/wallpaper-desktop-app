@@ -1,0 +1,173 @@
+##### run 1 tauri
+scale=1 hz=144 exe=3.81MB
+  [begin] last_input=0s ago, system_cpu=16%, ac=1
+start first=637ms
+  [start] last_input=39s ago, system_cpu=9%, ac=1
+start n=10 raw=[534.0, 507.0, 500.0, 508.0, 501.0, 507.0, 500.0, 521.0, 493.0, 507.0]
+start median=507 p95=534
+open12s: procs=7 webview2=6 private=169.7MB privWS=79.0MB hostPrivate=5.0MB cpu=1766ms
+  [open] last_input=55s ago, system_cpu=6%, ac=1
+open idle cpu over 4s=0ms
+[1125/145207.598:ERROR:ui\gfx\win\window_impl.cc:172] Failed to unregister class Chrome_WidgetWin_0. Error = 1412
+scroll: procs=7 webview2=6 private=293.6MB privWS=108.4MB hostPrivate=5.9MB cpu=5625ms
+  [scroll] last_input=70s ago, system_cpu=8%, ac=1
+scroll cpu over 6s=3562ms
+after_scroll: procs=7 webview2=6 private=323.0MB privWS=113.6MB hostPrivate=5.6MB cpu=6906ms
+[1125/145227.875:ERROR:ui\gfx\win\window_impl.cc:172] Failed to unregister class Chrome_WidgetWin_0. Error = 1412
+frames n=1441 median=6.90 p95=7.30 p99=7.80 max=8.50 late(>1.5 interval)=0
+min15s: procs=1 webview2=0 private=1.6MB privWS=1.1MB hostPrivate=1.6MB cpu=0ms
+destroyed+12s: procs=1 webview2=0 private=5.2MB privWS=3.6MB hostPrivate=5.2MB cpu=47ms
+after8cycles+12s: procs=1 webview2=0 private=6.0MB privWS=4.3MB hostPrivate=6.0MB cpu=422ms
+  [tray] last_input=186s ago, system_cpu=9%, ac=1
+reopen raw=[409.0, 380.0, 378.0, 383.0, 382.0, 491.0, 404.0, 375.0]
+reopen n=8 median=383 max=491
+##### run 2 sw
+scale=1 hz=144 exe=9.62MB
+  [begin] last_input=189s ago, system_cpu=16%, ac=1
+start first=124ms
+  [start] last_input=225s ago, system_cpu=7%, ac=1
+start n=10 raw=[133.0, 119.0, 119.0, 134.0, 126.0, 119.0, 133.0, 112.0, 112.0, 161.0]
+start median=126 p95=161
+open12s: procs=1 webview2=0 private=11.8MB privWS=10.7MB hostPrivate=11.8MB cpu=16ms
+  [open] last_input=241s ago, system_cpu=18%, ac=1
+open idle cpu over 4s=0ms
+scroll: procs=1 webview2=0 private=33.4MB privWS=32.0MB hostPrivate=33.4MB cpu=3812ms
+  [scroll] last_input=256s ago, system_cpu=14%, ac=1
+scroll cpu over 6s=2656ms
+after_scroll: procs=1 webview2=0 private=33.1MB privWS=31.7MB hostPrivate=33.1MB cpu=5047ms
+frames n=1725 median=6.26 p95=6.57 p99=6.78 max=9.25 late(>1.5 interval)=0
+min15s: procs=1 webview2=0 private=1.7MB privWS=1.3MB hostPrivate=1.7MB cpu=31ms
+destroyed+12s: procs=1 webview2=0 private=3.6MB privWS=2.7MB hostPrivate=3.6MB cpu=47ms
+after8cycles+12s: procs=1 webview2=0 private=5.2MB privWS=4.1MB hostPrivate=5.2MB cpu=375ms
+  [tray] last_input=370s ago, system_cpu=21%, ac=1
+reopen raw=[97.0, 89.0, 101.0, 114.0, 99.0, 84.0, 98.0, 97.0]
+reopen n=8 median=98 max=114
+##### run 3 fv
+scale=1 hz=144 exe=9.43MB
+  [begin] last_input=373s ago, system_cpu=16%, ac=1
+start first=261ms
+  [start] last_input=411s ago, system_cpu=15%, ac=1
+start n=10 raw=[271.0, 281.0, 264.0, 273.0, 258.0, 280.0, 275.0, 346.0, 297.0, 351.0]
+start median=280 p95=351
+open12s: procs=1 webview2=0 private=117.2MB privWS=60.5MB hostPrivate=117.2MB cpu=281ms
+  [open] last_input=428s ago, system_cpu=13%, ac=1
+open idle cpu over 4s=0ms
+scroll: procs=1 webview2=0 private=152.7MB privWS=84.5MB hostPrivate=152.7MB cpu=1422ms
+  [scroll] last_input=443s ago, system_cpu=14%, ac=1
+scroll cpu over 6s=891ms
+after_scroll: procs=1 webview2=0 private=153.0MB privWS=85.1MB hostPrivate=153.0MB cpu=1672ms
+frames n=1520 median=6.81 p95=8.29 p99=11.39 max=27.23 late(>1.5 interval)=58
+min15s: procs=1 webview2=0 private=2.0MB privWS=1.5MB hostPrivate=2.0MB cpu=0ms
+destroyed+12s: procs=1 webview2=0 private=73.3MB privWS=53.5MB hostPrivate=73.3MB cpu=219ms
+after8cycles+12s: procs=1 webview2=0 private=81.1MB privWS=59.6MB hostPrivate=81.1MB cpu=1344ms
+  [tray] last_input=556s ago, system_cpu=17%, ac=1
+reopen raw=[219.0, 178.0, 174.0, 152.0, 159.0, 164.0, 176.0, 166.0]
+reopen n=8 median=174 max=219
+##### run 4 sk
+scale=1 hz=144 exe=17.33MB
+  [begin] last_input=559s ago, system_cpu=16%, ac=1
+start first=596ms
+  [start] last_input=602s ago, system_cpu=32%, ac=1
+start n=10 raw=[518.0, 1013.0, 1067.0, 477.0, 605.0, 495.0, 514.0, 502.0, 477.0, 478.0]
+start median=514 p95=1067
+open12s: procs=1 webview2=0 private=226.9MB privWS=93.4MB hostPrivate=226.9MB cpu=438ms
+  [open] last_input=618s ago, system_cpu=10%, ac=1
+open idle cpu over 4s=0ms
+scroll: procs=1 webview2=0 private=248.9MB privWS=115.2MB hostPrivate=248.9MB cpu=1141ms
+  [scroll] last_input=633s ago, system_cpu=10%, ac=1
+scroll cpu over 6s=688ms
+after_scroll: procs=1 webview2=0 private=249.3MB privWS=115.4MB hostPrivate=249.3MB cpu=1438ms
+frames n=1467 median=6.91 p95=7.94 p99=8.36 max=8.96 late(>1.5 interval)=0
+min15s: procs=1 webview2=0 private=2.4MB privWS=1.8MB hostPrivate=2.4MB cpu=31ms
+destroyed+12s: procs=1 webview2=0 private=11.5MB privWS=6.3MB hostPrivate=11.5MB cpu=391ms
+after8cycles+12s: procs=1 webview2=0 private=15.1MB privWS=8.4MB hostPrivate=15.1MB cpu=4297ms
+  [tray] last_input=747s ago, system_cpu=15%, ac=1
+reopen raw=[552.0, 567.0, 568.0, 593.0, 538.0, 556.0, 556.0, 707.0]
+reopen n=8 median=567 max=707
+##### run 5 sk
+scale=1 hz=144 exe=17.33MB
+  [begin] last_input=750s ago, system_cpu=16%, ac=1
+start first=459ms
+  [start] last_input=792s ago, system_cpu=30%, ac=1
+start n=10 raw=[873.0, 872.0, 513.0, 491.0, 553.0, 472.0, 494.0, 455.0, 459.0, 456.0]
+start median=494 p95=873
+open12s: procs=1 webview2=0 private=225.5MB privWS=93.4MB hostPrivate=225.5MB cpu=344ms
+  [open] last_input=808s ago, system_cpu=5%, ac=1
+open idle cpu over 4s=31ms
+scroll: procs=1 webview2=0 private=251.2MB privWS=117.3MB hostPrivate=251.2MB cpu=2156ms
+  [scroll] last_input=824s ago, system_cpu=14%, ac=1
+scroll cpu over 6s=1391ms
+after_scroll: procs=1 webview2=0 private=251.7MB privWS=117.8MB hostPrivate=251.7MB cpu=2656ms
+frames n=1473 median=6.89 p95=8.07 p99=8.46 max=8.82 late(>1.5 interval)=0
+min15s: procs=1 webview2=0 private=2.4MB privWS=1.8MB hostPrivate=2.4MB cpu=0ms
+destroyed+12s: procs=1 webview2=0 private=11.0MB privWS=6.0MB hostPrivate=11.0MB cpu=359ms
+after8cycles+12s: procs=1 webview2=0 private=15.0MB privWS=8.6MB hostPrivate=15.0MB cpu=4156ms
+  [tray] last_input=937s ago, system_cpu=8%, ac=1
+reopen raw=[603.0, 565.0, 556.0, 554.0, 559.0, 546.0, 541.0, 610.0]
+reopen n=8 median=559 max=610
+##### run 6 fv
+scale=1 hz=144 exe=9.43MB
+  [begin] last_input=940s ago, system_cpu=16%, ac=1
+start first=280ms
+  [start] last_input=979s ago, system_cpu=9%, ac=1
+start n=10 raw=[277.0, 274.0, 268.0, 268.0, 267.0, 288.0, 261.0, 260.0, 269.0, 294.0]
+start median=269 p95=294
+open12s: procs=1 webview2=0 private=119.9MB privWS=60.7MB hostPrivate=119.9MB cpu=156ms
+  [open] last_input=995s ago, system_cpu=11%, ac=1
+open idle cpu over 4s=16ms
+scroll: procs=1 webview2=0 private=150.4MB privWS=85.0MB hostPrivate=150.4MB cpu=3672ms
+  [scroll] last_input=1010s ago, system_cpu=11%, ac=1
+scroll cpu over 6s=2703ms
+after_scroll: procs=1 webview2=0 private=150.2MB privWS=84.7MB hostPrivate=150.2MB cpu=4531ms
+frames n=1524 median=6.83 p95=8.18 p99=10.87 max=11.86 late(>1.5 interval)=46
+min15s: procs=1 webview2=0 private=2.0MB privWS=1.5MB hostPrivate=2.0MB cpu=31ms
+destroyed+12s: procs=1 webview2=0 private=73.5MB privWS=53.5MB hostPrivate=73.5MB cpu=297ms
+after8cycles+12s: procs=1 webview2=0 private=80.8MB privWS=59.8MB hostPrivate=80.8MB cpu=1422ms
+  [tray] last_input=1124s ago, system_cpu=7%, ac=1
+reopen raw=[233.0, 177.0, 149.0, 161.0, 172.0, 147.0, 160.0, 152.0]
+reopen n=8 median=161 max=233
+##### run 7 sw
+scale=1 hz=144 exe=9.62MB
+  [begin] last_input=1127s ago, system_cpu=16%, ac=1
+start first=132ms
+  [start] last_input=1163s ago, system_cpu=7%, ac=1
+start n=10 raw=[112.0, 119.0, 119.0, 112.0, 113.0, 120.0, 119.0, 113.0, 112.0, 112.0]
+start median=113 p95=120
+open12s: procs=1 webview2=0 private=12.0MB privWS=10.8MB hostPrivate=12.0MB cpu=62ms
+  [open] last_input=1179s ago, system_cpu=5%, ac=1
+open idle cpu over 4s=0ms
+scroll: procs=1 webview2=0 private=32.6MB privWS=31.7MB hostPrivate=32.6MB cpu=3922ms
+  [scroll] last_input=1195s ago, system_cpu=10%, ac=1
+scroll cpu over 6s=2938ms
+after_scroll: procs=1 webview2=0 private=32.4MB privWS=31.5MB hostPrivate=32.4MB cpu=4812ms
+frames n=1702 median=6.26 p95=6.60 p99=6.93 max=9.42 late(>1.5 interval)=0
+min15s: procs=1 webview2=0 private=1.7MB privWS=1.3MB hostPrivate=1.7MB cpu=0ms
+destroyed+12s: procs=1 webview2=0 private=3.1MB privWS=2.5MB hostPrivate=3.1MB cpu=78ms
+after8cycles+12s: procs=1 webview2=0 private=4.7MB privWS=3.8MB hostPrivate=4.7MB cpu=359ms
+  [tray] last_input=1308s ago, system_cpu=8%, ac=1
+reopen raw=[96.0, 96.0, 95.0, 99.0, 98.0, 98.0, 97.0, 97.0]
+reopen n=8 median=97 max=99
+##### run 8 tauri
+scale=1 hz=144 exe=3.81MB
+  [begin] last_input=1311s ago, system_cpu=16%, ac=1
+start first=557ms
+  [start] last_input=1352s ago, system_cpu=12%, ac=1
+start n=10 raw=[521.0, 576.0, 586.0, 513.0, 508.0, 542.0, 506.0, 514.0, 508.0, 529.0]
+start median=521 p95=586
+open12s: procs=7 webview2=6 private=169.9MB privWS=78.8MB hostPrivate=5.3MB cpu=1562ms
+  [open] last_input=1368s ago, system_cpu=6%, ac=1
+open idle cpu over 4s=0ms
+[1125/151400.483:ERROR:ui\gfx\win\window_impl.cc:172] Failed to unregister class Chrome_WidgetWin_0. Error = 1412
+scroll: procs=7 webview2=6 private=290.9MB privWS=105.2MB hostPrivate=5.5MB cpu=5109ms
+  [scroll] last_input=1383s ago, system_cpu=9%, ac=1
+scroll cpu over 6s=3062ms
+after_scroll: procs=7 webview2=6 private=320.6MB privWS=110.6MB hostPrivate=5.8MB cpu=6297ms
+[1125/151420.782:ERROR:ui\gfx\win\window_impl.cc:172] Failed to unregister class Chrome_WidgetWin_0. Error = 1412
+frames n=1442 median=6.90 p95=7.20 p99=7.50 max=7.90 late(>1.5 interval)=0
+min15s: procs=1 webview2=0 private=1.6MB privWS=1.1MB hostPrivate=1.6MB cpu=16ms
+destroyed+12s: procs=1 webview2=0 private=5.5MB privWS=3.6MB hostPrivate=5.5MB cpu=62ms
+after8cycles+12s: procs=1 webview2=0 private=5.4MB privWS=3.9MB hostPrivate=5.4MB cpu=266ms
+  [tray] last_input=1499s ago, system_cpu=10%, ac=1
+reopen raw=[427.0, 389.0, 420.0, 397.0, 384.0, 450.0, 395.0, 503.0]
+reopen n=8 median=420 max=503
+
