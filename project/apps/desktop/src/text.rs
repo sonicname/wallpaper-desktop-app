@@ -1,6 +1,8 @@
 //! Vietnamese wording for values that come from providers.
 
-use wallpaper_core::{Category, ProviderError, Rgb, Size, Sort, fit};
+use wallpaper_core::{BackdropMode, Category, DesktopError, ProviderError, Rgb, Size, Sort, fit};
+
+use crate::apply::ApplyError;
 
 pub fn sort(sort: Sort) -> &'static str {
     match sort {
@@ -41,6 +43,37 @@ pub fn error(error: &ProviderError) -> String {
         ProviderError::Status(code) => format!("Nguồn ảnh báo lỗi {code}."),
         ProviderError::BadResponse(_) => "Nguồn ảnh trả về dữ liệu không đọc được.".into(),
     }
+}
+
+pub fn apply_error(error: &ApplyError) -> String {
+    match error {
+        ApplyError::Download(reason) => self::error(reason),
+        ApplyError::Unreadable => "Không đọc được ảnh này.".into(),
+        ApplyError::Disk => "Không ghi được ảnh xuống đĩa. Kiểm tra dung lượng trống.".into(),
+        ApplyError::Desktop(DesktopError::NotApplied) => {
+            "Windows không nhận hình nền. Có thể máy bị quản trị viên khóa.".into()
+        }
+        ApplyError::Desktop(DesktopError::Missing(_)) => {
+            "Không hoàn tác được vì ảnh trước đó đã bị xóa.".into()
+        }
+        ApplyError::Desktop(DesktopError::System(_)) => "Windows báo lỗi khi đổi hình nền.".into(),
+        ApplyError::NothingToUndo => "Không còn gì để hoàn tác.".into(),
+    }
+}
+
+/// What the user loses for good by setting a picture.
+pub fn mode_warning(mode: BackdropMode) -> &'static str {
+    match mode {
+        _ if mode.can_be_restored() => "",
+        BackdropMode::Spotlight => {
+            "Windows đang dùng Spotlight. Đặt ảnh sẽ tắt Spotlight và hoàn tác không bật lại được."
+        }
+        _ => "Windows đang trình chiếu. Đặt ảnh sẽ tắt trình chiếu và hoàn tác không bật lại được.",
+    }
+}
+
+pub fn target(position: usize, size: Size) -> String {
+    format!("Màn {} ({} × {})", position + 1, size.width, size.height)
 }
 
 pub struct FitText {

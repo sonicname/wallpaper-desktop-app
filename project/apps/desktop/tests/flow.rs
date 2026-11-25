@@ -5,17 +5,28 @@
 mod stage;
 
 use std::{
-    sync::{Arc, Mutex},
+    fs,
+    io::Cursor as Bytes,
+    path::{Path, PathBuf},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 
-use slint::{ComponentHandle, Model};
+use slint::{
+    ComponentHandle, Model,
+    platform::{Key, WindowEvent},
+};
 use stage::Stage;
 use wallpaper_core::{
-    Capabilities, Category, Cursor, Http, Item, ListRequest, Page, Provider, ProviderError,
-    ProviderInfo, RateLimit, Ratio, Rgb, Size, Sort,
+    Backdrop, BackdropMode, Capabilities, Category, Cursor, Desktop, DesktopError, Http, Item,
+    ListRequest, Page, Picture, Provider, ProviderError, ProviderInfo, RateLimit, Ratio, Rgb,
+    Screen, Size, Sort,
 };
 use wallpaper_desktop::{App, AppWindow, Config};
+use wallpaper_host::DiskCache;
 
 static INFO: ProviderInfo = ProviderInfo {
     id: "fake",
@@ -70,12 +81,111 @@ impl Provider for Fake {
     }
 }
 
+/// A landscape and a portrait screen.
+struct FakeDesktop {
+    shown: Mutex<Backdrop>,
+    fails: AtomicBool,
+}
+
+impl FakeDesktop {
+    fn new(picture: &Path) -> Self {
+        let pictures = ["left", "right"].map(|screen| Picture {
+            screen: screen.into(),
+            path: picture.into(),
+            kept: None,
+        });
+        Self {
+            shown: Mutex::new(Backdrop {
+                mode: BackdropMode::Picture,
+                placement: 2,
+                pictures: pictures.into(),
+            }),
+            fails: AtomicBool::new(false),
+        }
+    }
+
+    fn path(&self, screen: usize) -> PathBuf {
+        self.shown.lock().unwrap().pictures[screen].path.clone()
+    }
+
+    fn set(&self, screen: &str, path: &Path) {
+        let mut shown = self.shown.lock().unwrap();
+        let picture = shown
+            .pictures
+            .iter_mut()
+            .find(|p| p.screen == screen)
+            .unwrap();
+        picture.path = path.into();
+    }
+}
+
+impl Desktop for FakeDesktop {
+    fn screens(&self) -> Vec<Screen> {
+        let screen = |id: &str, width, height, primary| Screen {
+            id: id.into(),
+            size: Size::new(width, height),
+            primary,
+        };
+        vec![
+            screen("left", 2560, 1440, true),
+            screen("right", 1440, 2560, false),
+        ]
+    }
+
+    fn read(&self) -> Result<Backdrop, DesktopError> {
+        Ok(self.shown.lock().unwrap().clone())
+    }
+
+    fn apply(&self, pictures: &[(String, PathBuf)]) -> Result<(), DesktopError> {
+        for (screen, path) in pictures {
+            assert!(path.is_file());
+            self.set(screen, path);
+            if self.fails.load(Ordering::Relaxed) {
+                return Err(DesktopError::NotApplied);
+            }
+        }
+        self.shown.lock().unwrap().placement = 4;
+        Ok(())
+    }
+
+    fn restore(&self, backdrop: &Backdrop) -> Result<(), DesktopError> {
+        for picture in &backdrop.pictures {
+            let path = picture
+                .existing()
+                .ok_or(DesktopError::Missing(picture.path.clone()))?;
+            self.set(&picture.screen, path);
+        }
+        self.shown.lock().unwrap().placement = backdrop.placement;
+        Ok(())
+    }
+}
+
+fn original_url(id: &str) -> String {
+    format!("https://picture.invalid/{id}")
+}
+
+/// A picture with a red left half and a blue right half.
+fn two_halves() -> Vec<u8> {
+    let picture = image::RgbImage::from_fn(640, 360, |x, _| {
+        image::Rgb(if x < 320 { [255, 0, 0] } else { [0, 0, 255] })
+    });
+    let mut bytes = Bytes::new(vec![]);
+    picture
+        .write_to(&mut bytes, image::ImageFormat::Png)
+        .unwrap();
+    bytes.into_inner()
+}
+
+fn size_of(path: &Path) -> (u32, u32) {
+    image::image_dimensions(path).unwrap()
+}
+
 fn items(ids: std::ops::Range<u32>) -> Vec<Item> {
     ids.map(|id| Item {
         provider: "fake",
         id: id.to_string(),
         size: Size::new(2560, 1440),
-        image_url: String::new(),
+        image_url: original_url(&id.to_string()),
         page_url: String::new(),
         file_bytes: 1,
         mime: "image/jpeg".into(),
@@ -105,10 +215,16 @@ fn browsing() {
         answer: Mutex::new(Arc::new(|_| Err(ProviderError::Network("down".into())))),
         asked: Mutex::default(),
     });
+    let data = std::env::temp_dir().join(format!("wallpaper-flow-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&data);
+    let originals = DiskCache::open(data.join("originals")).unwrap();
+    let mine = data.join("mine.jpg");
+    fs::write(&mine, b"the wallpaper from before").unwrap();
+    let desktop = Arc::new(FakeDesktop::new(&mine));
     let app = App::new(Config {
         provider: fake.clone(),
-        screen: Some(Size::new(2560, 1440)),
-        cache_dir: None,
+        desktop: desktop.clone(),
+        data_dir: Some(data.clone()),
     })
     .unwrap();
     let window = app.window().clone_strong();
@@ -228,10 +344,105 @@ fn browsing() {
     window.invoke_step(-1);
     assert!(window.get_detail().source.ends_with("51"));
 
+    // Arrow keys and Escape work without a click first.
+    let press = |stage: &mut Stage, key: Key| {
+        let text = slint::SharedString::from(key);
+        stage
+            .window
+            .dispatch_event(WindowEvent::KeyPressed { text: text.clone() });
+        stage
+            .window
+            .dispatch_event(WindowEvent::KeyReleased { text });
+        stage.run_for(Duration::from_millis(50));
+    };
+    stage.run_for(Duration::from_millis(50));
+    press(&mut stage, Key::RightArrow);
+    assert!(window.get_detail().source.ends_with("52"));
+    press(&mut stage, Key::LeftArrow);
+    assert!(window.get_detail().source.ends_with("51"));
+    press(&mut stage, Key::Escape);
+    assert!(!window.get_detail_open());
+
+    // A picture that cannot be downloaded changes nothing.
+    window.invoke_open(1);
+    assert!(!window.get_can_undo());
+    let toast = |window: &AppWindow| window.get_toast().to_string();
+    window.invoke_apply();
+    assert!(window.get_changing());
+    assert!(stage.run_until(Duration::from_secs(30), || !window.get_changing()));
+    assert!(
+        toast(&window).contains("Không kết nối được"),
+        "{}",
+        toast(&window)
+    );
+    assert_eq!(desktop.path(0), mine);
+    assert!(!window.get_can_undo());
+
+    // Every screen gets its own crop, in its own size.
+    originals.put(&original_url("51"), &two_halves()).unwrap();
+    window.invoke_apply();
+    assert!(stage.run_until(WAIT, || !window.get_changing()));
+    assert_eq!(toast(&window), "Đã đặt làm hình nền.");
+    assert_eq!(size_of(&desktop.path(0)), (2560, 1440));
+    assert_eq!(size_of(&desktop.path(1)), (1440, 2560));
+    assert!(window.get_can_undo());
+    let first = desktop.path(0);
+
+    // A single screen leaves the other one alone, and the preview follows it.
+    assert_eq!(window.get_targets().row_count(), 3);
+    window.invoke_pick_target(2);
+    assert_eq!(on(window.get_targets()), [false, false, true]);
+    assert_eq!(window.get_screen_name(), "1440 × 2560");
+    assert!(
+        !window.get_detail().fit_good,
+        "a landscape picture does not fit a portrait screen"
+    );
+    originals
+        .put(&original_url("52"), &two_halves()[..])
+        .unwrap();
+    window.invoke_step(1);
+    window.invoke_apply();
+    assert!(stage.run_until(WAIT, || !window.get_changing()));
+    assert_eq!(desktop.path(0), first);
+
+    // A change that fails half way is rolled back and leaves no undo step.
+    window.invoke_pick_target(0);
+    let portrait = desktop.path(1);
+    desktop.fails.store(true, Ordering::Relaxed);
+    window.invoke_apply();
+    assert!(stage.run_until(WAIT, || !window.get_changing()));
+    assert!(
+        toast(&window).contains("Windows không nhận"),
+        "{}",
+        toast(&window)
+    );
+    assert_eq!(
+        (desktop.path(0), desktop.path(1)),
+        (first.clone(), portrait)
+    );
+    desktop.fails.store(false, Ordering::Relaxed);
+
+    // Undo walks back to the very first wallpaper, then is gone.
+    for expected in [&first, &mine] {
+        assert!(window.get_can_undo());
+        window.invoke_undo();
+        assert!(stage.run_until(WAIT, || !window.get_changing()));
+        assert_eq!(&desktop.path(0), expected);
+    }
+    assert!(!window.get_can_undo());
+    assert_eq!(desktop.path(1), mine);
+    assert_eq!(desktop.shown.lock().unwrap().placement, 2);
+    let left: Vec<_> = fs::read_dir(data.join("pictures"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name())
+        .collect();
+    assert_eq!(left, ["history.json"], "unused pictures must be deleted");
+
     // No result is explained.
     fake.answers(|_| Ok(Page::default()));
     window.set_detail_open(false);
     window.invoke_search("nothing".into());
     assert!(stage.run_until(WAIT, || window.get_message().contains("Không có ảnh nào")));
     assert!(!window.get_can_retry());
+    let _ = fs::remove_dir_all(&data);
 }

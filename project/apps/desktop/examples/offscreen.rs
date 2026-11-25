@@ -1,8 +1,10 @@
 //! Runs the real UI with live data but draws into memory, so no window ever appears.
+//! Only the `wallpaper` mode changes the desktop, and it undoes the change after some seconds.
 //!
 //! ```text
 //! cargo run --release --example offscreen -- shots <folder> [width height scale]
 //! cargo run --release --example offscreen -- bench <width> <height> <scale> [last-frame.png]
+//! cargo run --release --example offscreen -- wallpaper <seconds>
 //! ```
 
 #[path = "support/stage.rs"]
@@ -13,13 +15,13 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use slint::{ComponentHandle, LogicalPosition, Model, platform::WindowEvent};
 use stage::Stage;
-use wallpaper_core::Size;
 use wallpaper_desktop::{App, AppWindow, Config};
+use wallpaper_platform_windows::WindowsDesktop;
 use wallpaper_provider_wallhaven::Wallhaven;
 
 fn save(stage: &Stage, path: &Path) {
@@ -52,8 +54,14 @@ fn main() {
         args.get(at)
             .map_or(default, |text| text.parse().expect("a number"))
     };
-    let bench = args.first().is_some_and(|mode| mode == "bench");
-    let first = if bench { 1 } else { 2 };
+    let mode = args.first().map_or("", String::as_str);
+    // Where the window size starts. The wallpaper mode keeps the default one.
+    let first = match mode {
+        "bench" => 1,
+        "shots" => 2,
+        "wallpaper" => args.len(),
+        _ => panic!("the mode must be shots, bench or wallpaper"),
+    };
     let (width, height) = (
         number(first, 1280.0) as u32,
         number(first + 1, 820.0) as u32,
@@ -63,8 +71,8 @@ fn main() {
     let mut stage = Stage::new(width, height, scale);
     let app = App::new(Config {
         provider: Arc::new(Wallhaven),
-        screen: Some(Size::new(2560, 1440)),
-        cache_dir: Some(env::temp_dir().join("wallpaper-offscreen-thumbs")),
+        desktop: Arc::new(WindowsDesktop),
+        data_dir: Some(env::temp_dir().join("wallpaper-offscreen")),
     })
     .unwrap();
     let window = app.window().clone_strong();
@@ -76,15 +84,34 @@ fn main() {
         window.get_rows().row_count()
     );
 
-    if bench {
-        run_bench(&mut stage, &window, scale);
-        if let Some(path) = args.get(4) {
-            save(&stage, Path::new(path));
+    match mode {
+        "bench" => {
+            run_bench(&mut stage, &window, scale);
+            if let Some(path) = args.get(4) {
+                save(&stage, Path::new(path));
+            }
         }
-    } else {
-        let folder = PathBuf::from(args.get(1).expect("a folder for the pictures"));
-        std::fs::create_dir_all(&folder).unwrap();
-        run_shots(&mut stage, &window, &folder);
+        "wallpaper" => run_wallpaper(&mut stage, &window, number(1, 10.0)),
+        _ => {
+            let folder = PathBuf::from(args.get(1).expect("a folder for the pictures"));
+            std::fs::create_dir_all(&folder).unwrap();
+            run_shots(&mut stage, &window, &folder);
+        }
+    }
+}
+
+fn run_wallpaper(stage: &mut Stage, window: &AppWindow, seconds: f32) {
+    window.invoke_open(1);
+    stage.run_until(Duration::from_secs(40), || window.get_picture_sharp());
+    for (name, change) in [
+        ("set", AppWindow::invoke_apply as fn(&AppWindow)),
+        ("undone", AppWindow::invoke_undo),
+    ] {
+        let start = Instant::now();
+        change(window);
+        stage.run_until(Duration::from_secs(60), || !window.get_changing());
+        println!("{name} after {:?}: {}", start.elapsed(), window.get_toast());
+        stage.run_for(Duration::from_secs_f32(seconds));
     }
 }
 
@@ -105,7 +132,26 @@ fn run_shots(stage: &mut Stage, window: &AppWindow, folder: &Path) {
     stage.run_for(Duration::from_millis(300));
     save(stage, &folder.join("detail.png"));
 
+    // States that depend on the machine, filled in by hand.
+    let option = |label: &str, on| wallpaper_desktop::Option {
+        label: label.into(),
+        on,
+    };
+    let targets = [
+        option("Tất cả màn hình", true),
+        option("Màn 1 (2560 × 1440)", false),
+        option("Màn 2 (1440 × 2560)", false),
+    ];
+    window.set_targets(slint::ModelRc::from(targets));
+    window.set_toast("Đã đặt làm hình nền.".into());
+    window.set_can_undo(true);
+    stage.run_for(Duration::from_millis(300));
+    save(stage, &folder.join("notice.png"));
     window.set_detail_open(false);
+    stage.run_for(Duration::from_millis(300));
+    save(stage, &folder.join("undo.png"));
+    window.set_toast("".into());
+
     window.invoke_search("zzqqxxyyzz no such picture".into());
     stage.run_until(Duration::from_secs(40), || !window.get_busy());
     stage.run_for(Duration::from_millis(300));

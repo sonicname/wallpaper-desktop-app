@@ -13,18 +13,22 @@ use std::{
 
 use slint::{ComponentHandle, ModelRc, PlatformError, SharedString, Timer, TimerMode, VecModel};
 use wallpaper_core::{
-    Category, Item, ListRequest, Page, Provider, ProviderError, Ratio, Size, Sort,
+    BackdropMode, Category, Desktop, Item, ListRequest, Page, Provider, ProviderError, Ratio,
+    Screen, Size, Sort,
 };
-use wallpaper_host::{DiskCache, HostHttp, Pixels, cover};
+use wallpaper_host::{DiskCache, Gallery, HostHttp, Pixels, cover};
 
 use crate::{
     AppWindow, Detail, Option as UiOption, Shade,
+    apply::{self, ApplyError},
     grid::{self, GridModel},
     loader::Loader,
     text,
 };
 
-const CACHE_BYTES: u64 = 200 << 20;
+const THUMB_BYTES: u64 = 200 << 20;
+const ORIGINAL_BYTES: u64 = 200 << 20;
+const TOAST: Duration = Duration::from_secs(8);
 /// Larger originals stay blurry in the preview instead of using hundreds of megabytes.
 const MAX_PREVIEW_PIXELS: u64 = 40_000_000;
 /// A random listing with few matches repeats itself. Stop after this many pages without news.
@@ -36,10 +40,10 @@ thread_local! {
 
 pub struct Config {
     pub provider: Arc<dyn Provider>,
-    /// Physical size of the primary screen, when it is known.
-    pub screen: Option<Size>,
-    /// Where thumbnails are kept. Nothing is written without it.
-    pub cache_dir: Option<PathBuf>,
+    pub desktop: Arc<dyn Desktop>,
+    /// Where pictures and the undo history are kept. Without it nothing is written, and the
+    /// wallpaper cannot be changed.
+    pub data_dir: Option<PathBuf>,
 }
 
 pub struct App {
@@ -79,13 +83,21 @@ struct Controller {
     http: Arc<HostHttp>,
     loader: Loader,
     grid: Rc<GridModel>,
+    desktop: Arc<dyn Desktop>,
+    gallery: Option<Arc<Gallery>>,
+    /// The primary screen when the app started, which the screen filter stands for.
     screen: Option<Size>,
+    screens: RefCell<Vec<Screen>>,
+    /// Index into `screens`, or none for all of them.
+    target: StdCell<Option<usize>>,
+    changing: StdCell<bool>,
     listing: RefCell<Listing>,
     /// Answers to an older listing are ignored.
     epoch: StdCell<u64>,
     selected: StdCell<usize>,
     preview: Arc<AtomicU64>,
     resize: Timer,
+    toast: Timer,
 }
 
 impl Controller {
@@ -93,12 +105,23 @@ impl Controller {
         let window = AppWindow::new()?;
         let capabilities = config.provider.info().capabilities;
         let http = Arc::new(HostHttp::new(config.provider.info().rate));
-        let cache = config.cache_dir.and_then(|dir| DiskCache::open(dir).ok());
-        if let Some(cache) = &cache {
+        let folder = |name| config.data_dir.as_ref().map(|dir| dir.join(name));
+        let cache = |name, max_bytes| {
+            let cache = DiskCache::open(folder(name)?).ok()?;
             let dir = cache.dir().to_owned();
-            thread::spawn(move || DiskCache::open(dir).and_then(|c| c.trim(CACHE_BYTES)));
-        }
-        let loader = Loader::new(http.clone(), cache);
+            thread::spawn(move || DiskCache::open(dir).and_then(|c| c.trim(max_bytes)));
+            Some(cache)
+        };
+        let loader = Loader::new(
+            http.clone(),
+            cache("thumbs", THUMB_BYTES),
+            cache("originals", ORIGINAL_BYTES),
+        );
+        let gallery = folder("pictures")
+            .and_then(|dir| Gallery::open(dir).ok())
+            .map(Arc::new);
+        let screens = config.desktop.screens();
+        let screen = screens.first().map(|s| s.size);
         // The model is asked for rows in the middle of a redraw, so load the page afterwards.
         let grid = GridModel::new(loader.share(), || {
             Timer::single_shot(Duration::ZERO, || with_current(Controller::load_more));
@@ -113,13 +136,18 @@ impl Controller {
             http,
             loader,
             grid,
-            screen: config.screen,
+            desktop: config.desktop,
+            gallery,
+            screen,
+            screens: RefCell::new(screens),
+            target: StdCell::new(None),
+            changing: StdCell::new(false),
             listing: RefCell::new(Listing {
                 request: ListRequest {
                     sort,
                     ..Default::default()
                 },
-                fit_screen: config.screen.is_some()
+                fit_screen: screen.is_some()
                     && (capabilities.min_size || !capabilities.ratios.is_empty()),
                 seen: HashSet::new(),
                 total: None,
@@ -132,6 +160,7 @@ impl Controller {
             selected: StdCell::new(0),
             preview: Arc::default(),
             resize: Timer::default(),
+            toast: Timer::default(),
             window,
         });
         CURRENT.with(|c| *c.borrow_mut() = Rc::downgrade(&controller));
@@ -144,10 +173,13 @@ impl Controller {
         window.set_can_search(self.provider.info().capabilities.search);
         window.set_gap(grid::GAP);
         window.set_rows(ModelRc::from(self.grid.clone()));
-        if let Some(screen) = self.screen {
-            window.set_screen_aspect(screen.aspect());
-            window.set_screen_name(grid::size_label(screen).into());
-        }
+        window.set_can_apply(self.gallery.is_some());
+        self.show_targets();
+        self.show_undo();
+        window.on_pick_target(|i| with_current(|c| c.pick_target(i as usize)));
+        window.on_apply(|| with_current(Controller::apply));
+        window.on_undo(|| with_current(Controller::undo));
+        window.on_close_toast(|| with_current(|c| c.window.set_toast(SharedString::new())));
         window.on_search(|text| with_current(|c| c.change(|l| l.request.text = text.into())));
         window.on_pick_sort(|i| {
             with_current(|c| {
@@ -424,7 +456,8 @@ impl Controller {
             return;
         };
         self.selected.set(index);
-        let fit = text::fit_text(item.size, self.screen.unwrap_or(item.size));
+        self.refresh_screens();
+        let fit = text::fit_text(item.size, self.preview_screen().unwrap_or(item.size));
         self.window.set_detail(Detail {
             resolution: grid::size_label(item.size).into(),
             fit_title: fit.title.into(),
@@ -452,8 +485,7 @@ impl Controller {
             px(self.window.get_picture_width()),
             px(self.window.get_picture_height()),
         );
-        let (current, http, loader) =
-            (self.preview.clone(), self.http.clone(), self.loader.share());
+        let (current, loader) = (self.preview.clone(), self.loader.share());
         thread::spawn(move || {
             let wanted = || current.load(Ordering::Relaxed) == ticket;
             let decode = |bytes: Vec<u8>| cover(&bytes, target, 0.0, grid::BACKGROUND).ok();
@@ -471,11 +503,132 @@ impl Controller {
                 return;
             }
             let full = (pixels <= MAX_PREVIEW_PIXELS)
-                .then(|| http.image(&item.image_url).ok())
+                .then(|| loader.original(&item).ok())
                 .flatten()
                 .filter(|_| wanted())
                 .and_then(decode);
             deliver_preview(ticket, full, true);
+        });
+    }
+
+    /// Screens come and go while the app runs.
+    fn refresh_screens(&self) {
+        let now = self.desktop.screens();
+        if *self.screens.borrow() != now {
+            *self.screens.borrow_mut() = now;
+            self.target.set(None);
+            self.show_targets();
+        }
+        let desktop = self.desktop.clone();
+        thread::spawn(move || {
+            let mode = desktop.read().map_or(BackdropMode::Picture, |b| b.mode);
+            let _ = slint::invoke_from_event_loop(move || {
+                with_current(|c| c.window.set_mode_warning(text::mode_warning(mode).into()))
+            });
+        });
+    }
+
+    /// The screen the preview imitates.
+    fn preview_screen(&self) -> Option<Size> {
+        let screens = self.screens.borrow();
+        screens.get(self.target.get().unwrap_or(0)).map(|s| s.size)
+    }
+
+    /// Chips for "all" and every screen, or none with a single screen.
+    fn show_targets(&self) {
+        let screens = self.screens.borrow();
+        let target = self.target.get();
+        let mut options = vec![];
+        if screens.len() > 1 {
+            options.push(UiOption {
+                label: "Tất cả màn hình".into(),
+                on: target.is_none(),
+            });
+            options.extend(screens.iter().enumerate().map(|(i, screen)| UiOption {
+                label: text::target(i, screen.size).into(),
+                on: target == Some(i),
+            }));
+        }
+        self.window.set_targets(model(options.into_iter()));
+        if let Some(screen) = screens.get(target.unwrap_or(0)) {
+            self.window.set_screen_aspect(screen.size.aspect());
+            self.window
+                .set_screen_name(grid::size_label(screen.size).into());
+        }
+    }
+
+    fn pick_target(&self, option: usize) {
+        self.target.set(option.checked_sub(1));
+        self.show_targets();
+        self.show(self.selected.get());
+    }
+
+    fn apply(&self) {
+        let Some(item) = self.grid.item(self.selected.get()) else {
+            return;
+        };
+        let screens: Vec<Screen> = match self.target.get() {
+            Some(index) => self
+                .screens
+                .borrow()
+                .get(index)
+                .cloned()
+                .into_iter()
+                .collect(),
+            None => self.screens.borrow().clone(),
+        };
+        let loader = self.loader.share();
+        self.change_desktop("Đã đặt làm hình nền.", move |gallery, desktop| {
+            apply::apply(&item, &screens, &loader, gallery, desktop)
+        });
+    }
+
+    fn undo(&self) {
+        self.change_desktop("Đã trả lại hình nền trước đó.", apply::undo);
+    }
+
+    fn change_desktop(
+        &self,
+        success: &'static str,
+        work: impl FnOnce(&Gallery, &dyn Desktop) -> Result<(), ApplyError> + Send + 'static,
+    ) {
+        let Some(gallery) = self.gallery.clone() else {
+            return;
+        };
+        // Two changes at once would mix up the undo history.
+        if self.changing.replace(true) {
+            return;
+        }
+        self.window.set_changing(true);
+        let desktop = self.desktop.clone();
+        thread::spawn(move || {
+            let result = work(&gallery, &*desktop);
+            let _ = slint::invoke_from_event_loop(move || {
+                with_current(|c| {
+                    c.changing.set(false);
+                    c.window.set_changing(false);
+                    c.show_undo();
+                    c.show_toast(match &result {
+                        Ok(()) => success.into(),
+                        Err(error) => text::apply_error(error),
+                    });
+                })
+            });
+        });
+    }
+
+    fn show_undo(&self) {
+        let can_undo = self
+            .gallery
+            .as_ref()
+            .is_some_and(|g| g.previous().is_some());
+        self.window.set_can_undo(can_undo);
+    }
+
+    fn show_toast(&self, message: String) {
+        self.window.set_toast(message.into());
+        self.toast.start(TimerMode::SingleShot, TOAST, || {
+            with_current(|c| c.window.set_toast(SharedString::new()))
         });
     }
 

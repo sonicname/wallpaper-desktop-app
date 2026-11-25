@@ -1,5 +1,10 @@
 import { Theme } from "theme.slint";
-import { Button, IconButton } from "controls.slint";
+import { Button, Chip, IconButton } from "controls.slint";
+
+export struct Option {
+    label: string,
+    on: bool,
+}
 
 export struct Detail {
     resolution: string,
@@ -27,6 +32,10 @@ export component DetailView inherits Rectangle {
     in property <bool> sharp;
     in property <float> screen-aspect: 1.7778;
     in property <string> screen-name;
+    in property <[Option]> targets;
+    in property <string> warning;
+    in property <bool> can-apply;
+    in property <bool> changing;
     out property <length> picture-width: frame.width - 2 * bezel;
     out property <length> picture-height: frame.height - 2 * bezel;
     property <length> bezel: 8px;
@@ -36,6 +45,8 @@ export component DetailView inherits Rectangle {
     callback close();
     callback step(int);
     callback open-source();
+    callback pick-target(int);
+    callback apply();
     public function take-focus() { keys.focus(); }
 
     background: Theme.background;
@@ -138,33 +149,54 @@ export component DetailView inherits Rectangle {
             padding-top: 76px;
             spacing: 22px;
 
-            Text { text: detail.resolution; color: Theme.text; font-size: 28px; font-weight: 600; }
+            // Facts scroll when the window is low, so that the buttons always stay in reach.
+            Flickable {
+                vertical-stretch: 1;
+                min-height: 80px;
+                content-height: facts.preferred-height;
+                facts := VerticalLayout {
+                    alignment: start;
+                    spacing: 22px;
 
-            VerticalLayout {
-                spacing: 4px;
-                Text {
-                    text: detail.fit-title;
-                    color: detail.fit-good ? Theme.accent : Theme.danger;
-                    font-size: 15px;
-                    font-weight: 600;
-                    wrap: word-wrap;
+                    Text { text: detail.resolution; color: Theme.text; font-size: 28px; font-weight: 600; }
+
+                    VerticalLayout {
+                        spacing: 4px;
+                        Text {
+                            text: detail.fit-title;
+                            color: detail.fit-good ? Theme.accent : Theme.danger;
+                            font-size: 15px;
+                            font-weight: 600;
+                            wrap: word-wrap;
+                        }
+                        Text { text: detail.fit-note; color: Theme.muted; font-size: 13px; wrap: word-wrap; }
+                    }
+
+                    if detail.palette.length > 0: HorizontalLayout {
+                        height: 36px;
+                        for shade in detail.palette: Rectangle { background: shade; }
+                    }
+
+                    Fact { name: "Tệp"; value: detail.file; }
+                    Fact { name: "Nguồn"; value: detail.source; }
                 }
-                Text { text: detail.fit-note; color: Theme.muted; font-size: 13px; wrap: word-wrap; }
             }
-
-            if detail.palette.length > 0: HorizontalLayout {
-                height: 36px;
-                for shade in detail.palette: Rectangle { background: shade; }
-            }
-
-            Fact { name: "Tệp"; value: detail.file; }
-            Fact { name: "Nguồn"; value: detail.source; }
-
-            Rectangle { vertical-stretch: 1; }
 
             VerticalLayout {
                 spacing: 10px;
-                Button { text: "Đặt làm hình nền (sắp có)"; primary: true; enabled: false; }
+                if warning != "": Text { text: warning; color: Theme.danger; font-size: 13px; wrap: word-wrap; }
+                for target[i] in targets: Chip {
+                    text: target.label;
+                    quiet: true;
+                    checked: target.on;
+                    activated => { root.pick-target(i); }
+                }
+                Button {
+                    text: changing ? "Đang đổi…" : "Đặt làm hình nền";
+                    primary: true;
+                    enabled: can-apply && !changing;
+                    activated => { root.apply(); }
+                }
                 Button { text: "Mở trang gốc"; activated => { root.open-source(); } }
                 Text {
                     text: "Bản quyền ảnh thuộc về tác giả.";

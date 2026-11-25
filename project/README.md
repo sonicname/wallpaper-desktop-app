@@ -4,9 +4,9 @@ Cargo workspace chứa toàn bộ source code. Giấy phép: GPL-3.0-only (xem `
 
 - `apps/desktop`: app Windows, giao diện Slint (software renderer)
 - `packages/core`: kiểu dữ liệu, trait `Provider`, tính độ vừa màn hình. Không có UI, mạng hay API hệ điều hành
-- `packages/host`: HTTP, rate limit, cache đĩa, giải mã và cắt ảnh
+- `packages/host`: HTTP, rate limit, cache đĩa, giải mã và cắt ảnh, lịch sử hoàn tác hình nền
 - `packages/provider-wallhaven`: nguồn ảnh Wallhaven (chỉ SFW, không cần key)
-- `packages/platform-windows`: đọc độ phân giải màn hình, mở link
+- `packages/platform-windows`: đọc màn hình, đặt và trả lại hình nền, mở link
 
 Cần Visual Studio Build Tools với workload "Desktop development with C++". `rust-toolchain.toml` tự chọn toolchain MSVC cho riêng folder này.
 
@@ -18,12 +18,22 @@ cargo test --workspace                     # chạy test
 cargo clippy --workspace --all-targets     # kiểm tra lỗi thường gặp
 ```
 
+Test mặc định không đổi hình nền. Test trên desktop thật phải bật riêng, và tự trả lại hình nền cũ:
+
+```powershell
+$env:WALLPAPER_TEST_PICTURE = "C:\đường\dẫn\ảnh.png"
+cargo test -p wallpaper-platform-windows -- --ignored round_trip
+```
+
 Công cụ render ngoài màn hình (dùng dữ liệu thật, không hiện cửa sổ):
 
 ```sh
 cargo run --release --example offscreen -- shots <folder>       # chụp giao diện
 cargo run --release --example offscreen -- bench 3840 2100 1.5  # đo thời gian vẽ
+cargo run --release --example offscreen -- wallpaper 10         # đổi hình nền thật 10 giây rồi hoàn tác
 ```
+
+Dữ liệu của app nằm ở `%LOCALAPPDATA%\WallpaperDesktop`: `thumbs` và `originals` là cache, `pictures` chứa hình nền đang dùng và lịch sử hoàn tác.
 
 ## Thêm nguồn ảnh
 

@@ -93,6 +93,7 @@ export component Swatch inherits Pressable {
 export component Button inherits Pressable {
     in property <string> text;
     in property <bool> primary;
+    in property <bool> small;
     label: text;
     height: 40px;
     border-radius: 8px;
@@ -104,8 +105,8 @@ export component Button inherits Pressable {
     Text {
         text: root.text;
         color: !root.enabled ? Theme.muted : root.primary ? Theme.on-accent : Theme.text;
-        font-size: 14px;
-        font-weight: 600;
+        font-size: root.small ? 13px : 14px;
+        font-weight: root.small ? 400 : 600;
         horizontal-alignment: center;
         vertical-alignment: center;
     }

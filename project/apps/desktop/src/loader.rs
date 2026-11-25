@@ -3,7 +3,7 @@ use std::{
     thread,
 };
 
-use wallpaper_core::{Rgb, Size};
+use wallpaper_core::{Item, ProviderError, Rgb, Size};
 use wallpaper_host::{DiskCache, HostHttp, Pixels, cover};
 
 const WORKERS: usize = 6;
@@ -28,7 +28,8 @@ struct Shared {
     queue: Mutex<Queue>,
     ready: Condvar,
     http: Arc<HostHttp>,
-    cache: Option<DiskCache>,
+    thumbs: Option<DiskCache>,
+    originals: Option<DiskCache>,
 }
 
 #[derive(Default)]
@@ -38,12 +39,17 @@ struct Queue {
 }
 
 impl Loader {
-    pub fn new(http: Arc<HostHttp>, cache: Option<DiskCache>) -> Self {
+    pub fn new(
+        http: Arc<HostHttp>,
+        thumbs: Option<DiskCache>,
+        originals: Option<DiskCache>,
+    ) -> Self {
         let shared = Arc::new(Shared {
             queue: Mutex::default(),
             ready: Condvar::new(),
             http,
-            cache,
+            thumbs,
+            originals,
         });
         for _ in 0..WORKERS {
             let shared = shared.clone();
@@ -60,6 +66,23 @@ impl Loader {
     /// The bytes of a thumbnail, from disk when possible.
     pub fn thumb(&self, url: &str) -> Option<Vec<u8>> {
         self.shared.bytes(url, true)
+    }
+
+    /// The bytes of the full picture, from disk when possible.
+    pub fn original(&self, item: &Item) -> Result<Vec<u8>, ProviderError> {
+        let cache = self.shared.originals.as_ref();
+        if let Some(bytes) = cache.and_then(|c| c.get(&item.image_url)) {
+            return Ok(bytes);
+        }
+        let bytes = self.shared.http.image(&item.image_url)?;
+        // A cut off JPEG still decodes, with a grey lower part.
+        if (bytes.len() as u64) < item.file_bytes {
+            return Err(ProviderError::BadResponse("incomplete picture".into()));
+        }
+        if let Some(cache) = cache {
+            let _ = cache.put(&item.image_url, &bytes);
+        }
+        Ok(bytes)
     }
 
     pub fn share(&self) -> Self {
@@ -113,11 +136,11 @@ impl Shared {
     }
 
     fn bytes(&self, url: &str, use_cache: bool) -> Option<Vec<u8>> {
-        if use_cache && let Some(bytes) = self.cache.as_ref().and_then(|c| c.get(url)) {
+        if use_cache && let Some(bytes) = self.thumbs.as_ref().and_then(|c| c.get(url)) {
             return Some(bytes);
         }
         let bytes = self.http.image(url).ok()?;
-        if let Some(cache) = &self.cache {
+        if let Some(cache) = &self.thumbs {
             // A full disk only costs speed.
             let _ = cache.put(url, &bytes);
         }

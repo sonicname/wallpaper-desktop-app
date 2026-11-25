@@ -1,14 +1,9 @@
 import { Theme } from "theme.slint";
-import { Button, Chip, SearchField, Swatch } from "controls.slint";
+import { Button, Chip, IconButton, SearchField, Swatch } from "controls.slint";
 import { Cell, Grid, Row } from "grid.slint";
-import { Detail, DetailView } from "detail.slint";
+import { Detail, DetailView, Option } from "detail.slint";
 
-export { Cell, Row, Detail }
-
-export struct Option {
-    label: string,
-    on: bool,
-}
+export { Cell, Row, Detail, Option }
 
 export struct Shade {
     color: color,
@@ -20,8 +15,8 @@ export component AppWindow inherits Window {
     title: "Wallpaper";
     preferred-width: 1280px;
     preferred-height: 820px;
-    min-width: 960px;
-    min-height: 560px;
+    min-width: 1120px;
+    min-height: 600px;
     background: Theme.background;
     default-font-family: "Segoe UI";
 
@@ -61,6 +56,17 @@ export component AppWindow inherits Window {
     callback open(int);
     callback step(int);
     callback open-source();
+
+    in property <[Option]> targets;
+    in property <string> mode-warning;
+    in property <bool> can-apply;
+    in property <bool> changing;
+    in property <bool> can-undo;
+    in property <string> toast;
+    callback pick-target(int);
+    callback apply();
+    callback undo();
+    callback close-toast();
 
     changed grid-width => { layout-changed(); }
     changed grid-height => { layout-changed(); }
@@ -106,7 +112,6 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             spacing: 8px;
             height: 32px;
-            alignment: start;
             if screen-fit.label != "": Chip {
                 quiet: true;
                 text: screen-fit.label;
@@ -128,6 +133,15 @@ export component AppWindow inherits Window {
                     checked: shade.on;
                     activated => { root.pick-shade(i); }
                 }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            if can-undo: Button {
+                height: 32px;
+                width: 160px;
+                small: true;
+                text: "Hoàn tác hình nền";
+                enabled: !changing;
+                activated => { root.undo(); }
             }
         }
 
@@ -172,9 +186,40 @@ export component AppWindow inherits Window {
         sharp: root.picture-sharp;
         screen-aspect: root.screen-aspect;
         screen-name: root.screen-name;
+        targets: root.targets;
+        warning: root.mode-warning;
+        can-apply: root.can-apply;
+        changing: root.changing;
+        pick-target(i) => { root.pick-target(i); }
+        apply => { root.apply(); }
         close => { root.detail-open = false; }
         step(by) => { root.step(by); }
         open-source => { root.open-source(); }
+    }
+    if toast != "": Rectangle {
+        y: root.height - self.height - 24px;
+        width: message-row.preferred-width;
+        height: 56px;
+        border-radius: 12px;
+        border-width: 1px;
+        border-color: Theme.line;
+        background: Theme.raised;
+        accessible-role: text;
+        accessible-label: toast;
+        // Clicks next to the buttons must not reach what is underneath.
+        TouchArea { }
+        message-row := HorizontalLayout {
+            padding: 8px;
+            padding-left: 20px;
+            spacing: 16px;
+            Text { text: toast; color: Theme.text; font-size: 14px; vertical-alignment: center; }
+            if can-undo: Button { text: "Hoàn tác"; width: 104px; enabled: !changing; activated => { root.undo(); } }
+            IconButton {
+                label: "Ẩn thông báo";
+                commands: "M 4.5 4.5 L 11.5 11.5 M 11.5 4.5 L 4.5 11.5";
+                activated => { root.close-toast(); }
+            }
+        }
     }
     changed detail-open => { if (detail-open) { detail-view.take-focus(); } }
 }

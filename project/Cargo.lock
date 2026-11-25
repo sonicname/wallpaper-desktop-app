@@ -4622,6 +4622,9 @@ dependencies = [
 [[package]]
 name = "wallpaper-core"
 version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "wallpaper-desktop"
@@ -4642,6 +4645,8 @@ version = "0.1.0"
 dependencies = [
  "fast_image_resize",
  "image",
+ "serde",
+ "serde_json",
  "ureq",
  "wallpaper-core",
 ]
@@ -4651,7 +4656,7 @@ name = "wallpaper-platform-windows"
 version = "0.1.0"
 dependencies = [
  "wallpaper-core",
- "windows-sys 0.61.2",
+ "windows",
 ]
 
 [[package]]
