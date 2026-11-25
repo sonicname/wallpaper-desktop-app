@@ -102,6 +102,14 @@ impl GridModel {
         true
     }
 
+    /// Gives back the memory of all pictures. They are loaded again when shown.
+    pub fn release(&self) {
+        self.epoch.set(self.epoch.get() + 1);
+        self.cache.borrow_mut().clear();
+        self.cache.borrow_mut().shrink_to_fit();
+        self.notify.reset();
+    }
+
     pub fn clear(&self) {
         self.items.borrow_mut().clear();
         self.rebuild(false);

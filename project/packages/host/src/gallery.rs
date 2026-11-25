@@ -49,17 +49,15 @@ impl Gallery {
     /// Writes a picture that is ready to be shown. The name changes with the content, so the
     /// system never confuses it with an older picture.
     pub fn save(&self, pixels: &Pixels) -> io::Result<PathBuf> {
-        let (bytes, extension) = encode(pixels)?;
-        let size = pixels.size;
-        let name = format!(
-            "{:016x}-{}x{}.{extension}",
-            hash(&bytes),
-            size.width,
-            size.height
-        );
+        write_picture(&self.dir, pixels)
+    }
+
+    /// Takes over a picture written by [`write_picture`] somewhere else.
+    pub fn adopt(&self, picture: &Path) -> io::Result<PathBuf> {
+        let name = picture.file_name().ok_or(io::ErrorKind::InvalidInput)?;
         let path = self.dir.join(name);
         if !path.is_file() {
-            write_whole(&path, &bytes)?;
+            write_whole(&path, &fs::read(picture)?)?;
         }
         Ok(path)
     }
@@ -172,6 +170,23 @@ fn last_of(history: &History, workspace: Option<&str>) -> Option<usize> {
         .rposition(|b| b.workspace.as_deref() == workspace)
 }
 
+/// Writes a picture that is ready to be shown, under a name that depends on its content.
+pub fn write_picture(dir: &Path, pixels: &Pixels) -> io::Result<PathBuf> {
+    let (bytes, extension) = encode(pixels)?;
+    let size = pixels.size;
+    let name = format!(
+        "{:016x}-{}x{}.{extension}",
+        hash(&bytes),
+        size.width,
+        size.height
+    );
+    let path = dir.join(name);
+    if !path.is_file() {
+        write_whole(&path, &bytes)?;
+    }
+    Ok(path)
+}
+
 /// PNG, because Windows compresses JPEG wallpapers a second time.
 fn encode(pixels: &Pixels) -> io::Result<(Vec<u8>, &'static str)> {
     let (width, height) = (pixels.size.width, pixels.size.height);
@@ -189,7 +204,8 @@ fn encode(pixels: &Pixels) -> io::Result<(Vec<u8>, &'static str)> {
     Ok((jpeg, "jpg"))
 }
 
-fn write_whole(path: &Path, bytes: &[u8]) -> io::Result<()> {
+/// Writes to a temporary file first, so that a crash never leaves half a file behind.
+pub fn write_whole(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let part = path.with_extension("part");
     fs::write(&part, bytes)?;
     fs::rename(&part, path).inspect_err(|_| drop(fs::remove_file(&part)))

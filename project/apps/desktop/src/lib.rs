@@ -3,10 +3,11 @@
 mod apply;
 mod controller;
 mod grid;
+mod icon;
 mod layout;
 mod loader;
 mod text;
 
 slint::include_modules!();
 
-pub use controller::{App, Config};
+pub use controller::{App, Config, open_window};

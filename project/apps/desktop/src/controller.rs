@@ -1,3 +1,5 @@
+mod rotation;
+
 use std::{
     cell::{Cell as StdCell, RefCell},
     collections::HashSet,
@@ -8,18 +10,19 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use slint::{ComponentHandle, ModelRc, PlatformError, SharedString, Timer, TimerMode, VecModel};
 use wallpaper_core::{
     BackdropMode, Category, Desktop, Item, ListRequest, Page, Provider, ProviderError, Ratio,
-    Screen, Size, Sort,
+    Screen, Size, Sort, System,
 };
+use wallpaper_daily::Daily;
 use wallpaper_host::{DiskCache, Gallery, HostHttp, Pixels, cover};
 
 use crate::{
-    AppWindow, Detail, Option as UiOption, Shade,
+    AppWindow, Detail, Option as UiOption, Shade, Tray,
     apply::{self, ApplyError, Place},
     grid::{self, GridModel},
     loader::Loader,
@@ -41,6 +44,7 @@ thread_local! {
 pub struct Config {
     pub provider: Arc<dyn Provider>,
     pub desktop: Arc<dyn Desktop>,
+    pub system: Arc<dyn System>,
     /// Where pictures and the undo history are kept. Without it nothing is written, and the
     /// wallpaper cannot be changed.
     pub data_dir: Option<PathBuf>,
@@ -52,17 +56,47 @@ pub struct App {
 
 impl App {
     pub fn new(config: Config) -> Result<Self, PlatformError> {
-        let controller = Controller::new(config)?;
-        controller.reload();
-        Ok(Self { controller })
+        Ok(Self {
+            controller: Controller::new(config)?,
+        })
     }
 
     pub fn window(&self) -> &AppWindow {
         &self.controller.window
     }
 
-    pub fn run(&self) -> Result<(), PlatformError> {
-        self.controller.window.run()
+    /// Shows the window, and loads the first page the first time.
+    pub fn open(&self) -> Result<(), PlatformError> {
+        self.controller.open()
+    }
+
+    /// Runs until the user quits. Without a reason to run in the background it returns at once.
+    pub fn run(&self, background: bool) -> Result<(), PlatformError> {
+        if background && !self.controller.runs_in_background() {
+            return Ok(());
+        }
+        self.controller.start_tray()?;
+        let window = self.controller.window.window();
+        window.on_close_requested(|| {
+            let mut response = slint::CloseRequestResponse::HideWindow;
+            with_current(|c| response = c.close());
+            response
+        });
+        if !background {
+            self.open()?;
+        }
+        self.controller.start_ticking();
+        slint::run_event_loop_until_quit()
+    }
+
+    /// Changes the wallpaper if it is due, and prepares the next ones. Runs every minute.
+    pub fn tick(&self) {
+        self.controller.tick();
+    }
+
+    /// What the close button of the window does.
+    pub fn close(&self) {
+        self.controller.close();
     }
 }
 
@@ -98,6 +132,19 @@ struct Controller {
     preview: Arc<AtomicU64>,
     resize: Timer,
     toast: Timer,
+    system: Arc<dyn System>,
+    daily: Option<Arc<Daily>>,
+    tray: RefCell<Option<Tray>>,
+    ticker: Timer,
+    loaded: StdCell<bool>,
+    refilling: StdCell<bool>,
+    /// Refills in a row that brought nothing.
+    failures: StdCell<u32>,
+    refill_after: StdCell<Option<Instant>>,
+    refill_error: RefCell<Option<ProviderError>>,
+    change_after: StdCell<Option<Instant>>,
+    /// The user asked for the next picture before one was prepared.
+    change_when_ready: StdCell<bool>,
 }
 
 impl Controller {
@@ -119,6 +166,9 @@ impl Controller {
         );
         let gallery = folder("pictures")
             .and_then(|dir| Gallery::open(dir).ok())
+            .map(Arc::new);
+        let daily = folder("daily")
+            .and_then(|dir| Daily::open(dir).ok())
             .map(Arc::new);
         let screens = config.desktop.screens();
         let screen = screens.first().map(|s| s.size);
@@ -161,6 +211,17 @@ impl Controller {
             preview: Arc::default(),
             resize: Timer::default(),
             toast: Timer::default(),
+            system: config.system,
+            daily,
+            tray: RefCell::default(),
+            ticker: Timer::default(),
+            loaded: StdCell::new(false),
+            refilling: StdCell::new(false),
+            failures: StdCell::new(0),
+            refill_after: StdCell::new(None),
+            refill_error: RefCell::default(),
+            change_after: StdCell::new(None),
+            change_when_ready: StdCell::new(false),
             window,
         });
         CURRENT.with(|c| *c.borrow_mut() = Rc::downgrade(&controller));
@@ -176,6 +237,7 @@ impl Controller {
         window.set_can_apply(self.gallery.is_some());
         self.show_targets();
         self.show_undo();
+        self.connect_daily();
         window.on_pick_target(|i| with_current(|c| c.pick_target(i as usize)));
         window.on_apply(|| with_current(Controller::apply));
         window.on_undo(|| with_current(Controller::undo));
@@ -266,20 +328,7 @@ impl Controller {
     fn toggle_category(&self, index: usize) {
         let all = self.provider.info().capabilities.categories;
         let Some(picked) = all.get(index) else { return };
-        self.change(|l| {
-            let mut on = enabled_categories(&l.request, all);
-            match on.iter().position(|c| c == picked) {
-                // At least one category has to stay on.
-                Some(_) if on.len() == 1 => {}
-                Some(at) => drop(on.remove(at)),
-                None => on.push(*picked),
-            }
-            l.request.categories = if on.len() == all.len() {
-                vec![]
-            } else {
-                all.iter().copied().filter(|c| on.contains(c)).collect()
-            };
-        });
+        self.change(|l| toggle(&mut l.request.categories, *picked, all));
     }
 
     /// The request without its position, with the screen filter applied.
@@ -424,7 +473,7 @@ impl Controller {
             label: label.into(),
             on,
         };
-        let on = enabled_categories(request, capabilities.categories);
+        let on = enabled_categories(&request.categories, capabilities.categories);
         self.window.set_sorts(model(
             capabilities
                 .sorts
@@ -513,12 +562,7 @@ impl Controller {
 
     /// Screens come and go while the app runs.
     fn refresh_screens(&self) {
-        let now = self.desktop.screens();
-        if *self.screens.borrow() != now {
-            *self.screens.borrow_mut() = now;
-            self.target.set(None);
-            self.show_targets();
-        }
+        self.update_screens();
         let desktop = self.desktop.clone();
         thread::spawn(move || {
             let mode = desktop.read().map_or(BackdropMode::Picture, |b| b.mode);
@@ -529,6 +573,15 @@ impl Controller {
                 })
             });
         });
+    }
+
+    fn update_screens(&self) {
+        let now = self.desktop.screens();
+        if *self.screens.borrow() != now {
+            *self.screens.borrow_mut() = now;
+            self.target.set(None);
+            self.show_targets();
+        }
     }
 
     /// The screen the preview imitates.
@@ -581,18 +634,30 @@ impl Controller {
             None => self.screens.borrow().clone(),
         };
         let loader = self.loader.share();
-        self.change_desktop("Đã đặt làm hình nền.", move |place| {
-            apply::apply(&item, &screens, &loader, place)
-        });
+        self.change_desktop(
+            "Đã đặt làm hình nền.",
+            self.desktop.workspace(),
+            true,
+            move |place| apply::apply(&item, &screens, &loader, place),
+        );
     }
 
     fn undo(&self) {
-        self.change_desktop("Đã trả lại hình nền trước đó.", apply::undo);
+        let workspace = self.desktop.workspace();
+        self.change_desktop(
+            "Đã trả lại hình nền trước đó.",
+            workspace,
+            true,
+            apply::undo,
+        );
     }
 
+    /// `workspace` is the one the user is looking at while asking: the one they mean.
     fn change_desktop(
         &self,
         success: &'static str,
+        workspace: Option<String>,
+        asked: bool,
         work: impl FnOnce(&Place) -> Result<(), ApplyError> + Send + 'static,
     ) {
         let Some(gallery) = self.gallery.clone() else {
@@ -603,9 +668,8 @@ impl Controller {
             return;
         }
         self.window.set_changing(true);
+        self.show_daily();
         let desktop = self.desktop.clone();
-        // Taken now: the workspace the user is looking at while clicking is the one they mean.
-        let workspace = desktop.workspace();
         thread::spawn(move || {
             let result = work(&Place {
                 gallery: &gallery,
@@ -617,6 +681,7 @@ impl Controller {
                     c.changing.set(false);
                     c.window.set_changing(false);
                     c.show_undo();
+                    c.after_change(asked, &result);
                     c.show_toast(match &result {
                         Ok(()) => success.into(),
                         Err(error) => text::apply_error(error),
@@ -660,16 +725,33 @@ fn deliver_preview(ticket: u64, pixels: Option<Pixels>, last: bool) {
     });
 }
 
-fn enabled_categories(request: &ListRequest, all: &[Category]) -> Vec<Category> {
-    if request.categories.is_empty() {
-        all.to_vec()
-    } else {
-        request.categories.clone()
+fn enabled_categories(chosen: &[Category], all: &[Category]) -> Vec<Category> {
+    if chosen.is_empty() { all } else { chosen }.to_vec()
+}
+
+/// Turns a category on or off, where an empty list means all of them.
+fn toggle(chosen: &mut Vec<Category>, picked: Category, all: &[Category]) {
+    let mut on = enabled_categories(chosen, all);
+    match on.iter().position(|c| *c == picked) {
+        // At least one category has to stay on.
+        Some(_) if on.len() == 1 => {}
+        Some(at) => drop(on.remove(at)),
+        None => on.push(picked),
     }
+    *chosen = if on.len() == all.len() {
+        vec![]
+    } else {
+        all.iter().copied().filter(|c| on.contains(c)).collect()
+    };
 }
 
 fn model<T: Clone + 'static>(values: impl Iterator<Item = T>) -> ModelRc<T> {
     ModelRc::new(VecModel::from(values.collect::<Vec<_>>()))
+}
+
+/// Shows the window of the running app. Call it on the event loop.
+pub fn open_window() {
+    with_current(|c| drop(c.open()));
 }
 
 fn with_current(run: impl FnOnce(&Controller)) {

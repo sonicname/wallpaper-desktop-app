@@ -70,6 +70,15 @@ impl Loader {
 
     /// The bytes of the full picture, from disk when possible.
     pub fn original(&self, item: &Item) -> Result<Vec<u8>, ProviderError> {
+        let bytes = self.fresh_original(item)?;
+        if let Some(cache) = &self.shared.originals {
+            let _ = cache.put(&item.image_url, &bytes);
+        }
+        Ok(bytes)
+    }
+
+    /// Like [`Self::original`], but leaves nothing behind on disk.
+    pub fn fresh_original(&self, item: &Item) -> Result<Vec<u8>, ProviderError> {
         let cache = self.shared.originals.as_ref();
         if let Some(bytes) = cache.and_then(|c| c.get(&item.image_url)) {
             return Ok(bytes);
@@ -78,9 +87,6 @@ impl Loader {
         // A cut off JPEG still decodes, with a grey lower part.
         if (bytes.len() as u64) < item.file_bytes {
             return Err(ProviderError::BadResponse("incomplete picture".into()));
-        }
-        if let Some(cache) = cache {
-            let _ = cache.put(&item.image_url, &bytes);
         }
         Ok(bytes)
     }

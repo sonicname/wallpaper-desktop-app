@@ -11,11 +11,11 @@ App đổi hình nền cho Windows 10 và 11: nhẹ, mở nhanh, tự tìm ảnh
 - Xem trước đúng phần ảnh sẽ hiện, kèm đánh giá có bị cắt hay phải phóng to không
 - Đặt hình nền cho tất cả hoặc từng màn hình, cắt đúng pixel
 - Hoàn tác tối đa 10 bước cho mỗi virtual desktop, về được hình nền trước khi dùng app. Riêng Spotlight và trình chiếu của Windows thì không bật lại được
+- Đổi ảnh ngẫu nhiên mỗi ngày: không lặp, tải sẵn để đổi được khi mất mạng, hoãn khi đang chơi game hoặc trình chiếu
+- Chạy dưới khay hệ thống, tùy chọn khởi động cùng Windows
 
 ## Chưa có
 
-- Đổi ảnh ngẫu nhiên mỗi ngày
-- Chạy nền dưới khay hệ thống, khởi động cùng Windows
 - Yêu thích, ảnh từ thư mục trên máy, chọn giữa nhiều nguồn ảnh
 - Bộ cài đặt và tự cập nhật
 

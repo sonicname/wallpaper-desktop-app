@@ -1,4 +1,6 @@
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Size {
     pub width: u32,
     pub height: u32,
@@ -29,7 +31,7 @@ impl Rgb {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Sort {
     Random,
     Newest,
@@ -38,7 +40,7 @@ pub enum Sort {
     Relevance,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Category {
     General,
     Anime,

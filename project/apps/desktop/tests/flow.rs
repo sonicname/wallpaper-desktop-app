@@ -27,6 +27,7 @@ use wallpaper_core::{
 };
 use wallpaper_desktop::{App, AppWindow, Config};
 use wallpaper_host::DiskCache;
+use wallpaper_platform_windows::WindowsSystem;
 
 static INFO: ProviderInfo = ProviderInfo {
     id: "fake",
@@ -264,11 +265,12 @@ fn browsing() {
     let app = App::new(Config {
         provider: fake.clone(),
         desktop: desktop.clone(),
+        system: Arc::new(WindowsSystem::new("WallpaperFlowTest", String::new())),
         data_dir: Some(data.clone()),
     })
     .unwrap();
     let window = app.window().clone_strong();
-    window.show().unwrap();
+    app.open().unwrap();
 
     // The first request already asks for pictures that fit the screen.
     assert!(

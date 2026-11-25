@@ -6,6 +6,6 @@ mod http;
 mod image_ops;
 
 pub use cache::DiskCache;
-pub use gallery::Gallery;
+pub use gallery::{Gallery, write_picture, write_whole};
 pub use http::HostHttp;
 pub use image_ops::{ImageError, Pixels, cover};

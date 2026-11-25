@@ -1,9 +1,11 @@
 import { Theme } from "theme.slint";
 import { Button, Chip, IconButton, SearchField, Swatch } from "controls.slint";
 import { Cell, Grid, Row } from "grid.slint";
+import { DailyState, DailyView } from "daily.slint";
 import { Detail, DetailView, Option } from "detail.slint";
+import { Tray } from "tray.slint";
 
-export { Cell, Row, Detail, Option }
+export { Cell, Row, DailyState, Detail, Option, Tray }
 
 export struct Shade {
     color: color,
@@ -13,6 +15,7 @@ export struct Shade {
 
 export component AppWindow inherits Window {
     title: "Wallpaper";
+    icon: app-icon;
     preferred-width: 1280px;
     preferred-height: 820px;
     min-width: 1120px;
@@ -20,6 +23,7 @@ export component AppWindow inherits Window {
     background: Theme.background;
     default-font-family: "Segoe UI";
 
+    in property <image> app-icon;
     in property <bool> can-search;
     in property <[Option]> sorts;
     in property <[Option]> categories;
@@ -68,6 +72,19 @@ export component AppWindow inherits Window {
     callback undo();
     callback close-toast();
 
+    in property <bool> has-daily;
+    in-out property <bool> daily-open;
+    in property <DailyState> daily;
+    callback open-daily();
+    callback toggle-daily();
+    callback toggle-paused();
+    callback toggle-autostart();
+    callback shift-hour(int);
+    callback pick-daily-sort(int);
+    callback pick-daily-category(int);
+    callback next-daily();
+    callback block-daily();
+
     changed grid-width => { layout-changed(); }
     changed grid-height => { layout-changed(); }
 
@@ -106,6 +123,15 @@ export component AppWindow inherits Window {
                 vertical-alignment: center;
                 horizontal-stretch: 1;
                 overflow: elide;
+            }
+            if has-daily: VerticalLayout {
+                alignment: center;
+                Chip {
+                    text: daily.enabled ? (daily.paused ? "Mỗi ngày: tạm dừng" : "Mỗi ngày: bật") : "Mỗi ngày";
+                    quiet: true;
+                    checked: daily.enabled;
+                    activated => { root.open-daily(); }
+                }
             }
         }
 
@@ -196,6 +222,25 @@ export component AppWindow inherits Window {
         step(by) => { root.step(by); }
         open-source => { root.open-source(); }
     }
+    daily-view := DailyView {
+        visible: daily-open;
+        x: daily-open ? 0px : root.width * 2;
+        width: root.width;
+        height: root.height;
+        state: root.daily;
+        changing: root.changing;
+        close => { root.daily-open = false; }
+        toggle-enabled => { root.toggle-daily(); }
+        toggle-paused => { root.toggle-paused(); }
+        toggle-autostart => { root.toggle-autostart(); }
+        shift-hour(by) => { root.shift-hour(by); }
+        pick-sort(i) => { root.pick-daily-sort(i); }
+        pick-category(i) => { root.pick-daily-category(i); }
+        next => { root.next-daily(); }
+        block => { root.block-daily(); }
+    }
+    changed daily-open => { if (daily-open) { daily-view.take-focus(); } }
+
     if toast != "": Rectangle {
         y: root.height - self.height - 24px;
         width: message-row.preferred-width;

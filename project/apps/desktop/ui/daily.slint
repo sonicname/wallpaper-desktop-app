@@ -1,0 +1,237 @@
+import { Theme } from "theme.slint";
+import { Button, Chip, IconButton, Switch } from "controls.slint";
+import { Option } from "detail.slint";
+
+export struct DailyState {
+    enabled: bool,
+    paused: bool,
+    hour: string,
+    status: string,
+    problem: bool,
+    autostart: bool,
+    autostart-note: string,
+    sorts: [Option],
+    categories: [Option],
+}
+
+component Caption inherits Text {
+    color: Theme.muted;
+    font-size: 12px;
+    wrap: word-wrap;
+}
+
+component Setting inherits HorizontalLayout {
+    in property <string> title;
+    in property <string> note;
+    in property <bool> on;
+    in property <bool> usable: true;
+    callback toggled();
+    spacing: 16px;
+
+    VerticalLayout {
+        horizontal-stretch: 1;
+        spacing: 3px;
+        Text {
+            text: root.title;
+            color: root.usable ? Theme.text : Theme.muted;
+            font-size: 14px;
+            font-weight: 600;
+            wrap: word-wrap;
+        }
+        if root.note != "": Caption { text: root.note; }
+    }
+    VerticalLayout {
+        alignment: start;
+        Switch {
+            label: root.title;
+            checked: root.on;
+            enabled: root.usable;
+            activated => { root.toggled(); }
+        }
+    }
+}
+
+// Chips in two columns.
+component Choices inherits Rectangle {
+    in property <[Option]> options;
+    in property <bool> quiet;
+    callback picked(int);
+    property <length> gap: 8px;
+    property <length> column: (self.width - gap) / 2;
+    height: ceil(options.length / 2) * (32px + gap) - gap;
+
+    for option[i] in options: Chip {
+        x: mod(i, 2) * (column + gap);
+        y: floor(i / 2) * (32px + gap);
+        width: column;
+        text: option.label;
+        quiet: root.quiet;
+        checked: option.on;
+        activated => { root.picked(i); }
+    }
+}
+
+// A drawer over the right side of the window.
+export component DailyView inherits Rectangle {
+    in property <DailyState> state;
+    in property <bool> changing;
+    in property <length> panel: 380px;
+    callback close();
+    callback toggle-enabled();
+    callback toggle-paused();
+    callback toggle-autostart();
+    callback shift-hour(int);
+    callback pick-sort(int);
+    callback pick-category(int);
+    callback next();
+    callback block();
+    public function take-focus() { keys.focus(); }
+
+    background: #000000a0;
+    TouchArea {
+        clicked => { root.close(); }
+        scroll-event => { accept }
+    }
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) { root.close(); return accept; }
+            return reject;
+        }
+    }
+
+    Rectangle {
+        x: root.width - panel;
+        width: panel;
+        background: Theme.surface;
+        TouchArea { scroll-event => { accept } }
+
+        Text {
+            x: 28px;
+            y: 24px;
+            text: "Đổi hình nền mỗi ngày";
+            color: Theme.text;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        IconButton {
+            x: parent.width - 56px;
+            y: 16px;
+            label: "Đóng";
+            commands: "M 3.5 3.5 L 12.5 12.5 M 12.5 3.5 L 3.5 12.5";
+            activated => { root.close(); }
+        }
+
+        VerticalLayout {
+            y: 72px;
+            height: parent.height - 72px;
+            padding: 28px;
+            padding-top: 8px;
+            spacing: 18px;
+
+            Flickable {
+                vertical-stretch: 1;
+                min-height: 80px;
+                content-height: settings.preferred-height;
+                settings := VerticalLayout {
+                    alignment: start;
+                    spacing: 22px;
+
+                    Setting {
+                        title: "Tự đổi mỗi ngày";
+                        note: "Khi bật, đóng cửa sổ thì app vẫn chạy dưới khay hệ thống.";
+                        on: state.enabled;
+                        toggled => { root.toggle-enabled(); }
+                    }
+                    if state.enabled: Setting {
+                        title: "Tạm dừng";
+                        on: state.paused;
+                        toggled => { root.toggle-paused(); }
+                    }
+                    if state.enabled: HorizontalLayout {
+                        spacing: 10px;
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            spacing: 3px;
+                            Text { text: "Giờ đổi"; color: Theme.text; font-size: 14px; font-weight: 600; }
+                            Caption { text: "Máy tắt lúc đó thì đổi khi mở lại."; }
+                        }
+                        VerticalLayout {
+                            alignment: start;
+                            IconButton {
+                                label: "Sớm hơn một giờ";
+                                commands: "M 3 8 L 13 8";
+                                activated => { root.shift-hour(-1); }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: start;
+                            Text {
+                                width: 52px;
+                                height: 40px;
+                                text: state.hour;
+                                color: Theme.text;
+                                font-size: 16px;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: start;
+                            IconButton {
+                                label: "Muộn hơn một giờ";
+                                commands: "M 3 8 L 13 8 M 8 3 L 8 13";
+                                activated => { root.shift-hour(1); }
+                            }
+                        }
+                    }
+                    Setting {
+                        title: "Khởi động cùng Windows";
+                        note: state.autostart-note;
+                        usable: state.enabled || state.autostart;
+                        on: state.autostart;
+                        toggled => { root.toggle-autostart(); }
+                    }
+                    if state.enabled: VerticalLayout {
+                        spacing: 10px;
+                        Text { text: "Chọn ảnh từ"; color: Theme.text; font-size: 14px; font-weight: 600; }
+                        Choices {
+                            options: state.sorts;
+                            picked(i) => { root.pick-sort(i); }
+                        }
+                    }
+                    if state.enabled && state.categories.length > 1: VerticalLayout {
+                        spacing: 10px;
+                        Text { text: "Danh mục"; color: Theme.text; font-size: 14px; font-weight: 600; }
+                        Choices {
+                            options: state.categories;
+                            quiet: true;
+                            picked(i) => { root.pick-category(i); }
+                        }
+                    }
+                }
+            }
+
+            if state.enabled: VerticalLayout {
+                spacing: 10px;
+                Text {
+                    text: state.status;
+                    color: state.problem ? Theme.danger : Theme.muted;
+                    font-size: 13px;
+                    wrap: word-wrap;
+                }
+                Button {
+                    text: changing ? "Đang đổi…" : "Đổi ngay";
+                    primary: true;
+                    enabled: !changing;
+                    activated => { root.next(); }
+                }
+                Button {
+                    text: "Không hiện lại ảnh này";
+                    enabled: !changing;
+                    activated => { root.block(); }
+                }
+            }
+        }
+    }
+}

@@ -112,6 +112,26 @@ export component Button inherits Pressable {
     }
 }
 
+export component Switch inherits Pressable {
+    checkable: true;
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    border-width: root.focused ? 2px : 1px;
+    border-color: root.focused ? Theme.text : root.checked && root.enabled ? Theme.accent : Theme.line;
+    background: root.checked && root.enabled ? Theme.accent : Theme.raised;
+    animate background { duration: Theme.quick; }
+
+    Rectangle {
+        x: root.checked ? parent.width - self.width - 4px : 4px;
+        width: 16px;
+        height: 16px;
+        border-radius: 8px;
+        background: root.checked && root.enabled ? Theme.on-accent : Theme.muted;
+        animate x { duration: Theme.quick; }
+    }
+}
+
 export component IconButton inherits Pressable {
     in property <string> commands;
     width: 40px;
