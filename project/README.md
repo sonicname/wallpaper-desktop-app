@@ -1,14 +1,14 @@
 # Project
 
-Cargo workspace chứa toàn bộ source code. Giấy phép: GPL-3.0-only (xem `LICENSE` ở gốc repo).
+Cargo workspace chứa toàn bộ source code. Giấy phép: GPL-3.0-only (xem [LICENSE](../LICENSE)).
 
 - `apps/desktop`: app Windows, giao diện Slint (software renderer)
 - `packages/core`: kiểu dữ liệu, trait `Provider`, tính độ vừa màn hình. Không có UI, mạng hay API hệ điều hành
 - `packages/host`: HTTP, rate limit, cache đĩa, giải mã và cắt ảnh, lịch sử hoàn tác hình nền
 - `packages/provider-wallhaven`: nguồn ảnh Wallhaven (chỉ SFW, không cần key)
-- `packages/platform-windows`: đọc màn hình, đặt và trả lại hình nền, mở link
+- `packages/platform-windows`: đọc màn hình và virtual desktop, đặt và trả lại hình nền, mở link. Chi tiết ở [docs/windows-wallpaper.md](../docs/windows-wallpaper.md)
 
-Cần Visual Studio Build Tools với workload "Desktop development with C++". `rust-toolchain.toml` tự chọn toolchain MSVC cho riêng folder này.
+Chỉ build được trên Windows. Cần Visual Studio Build Tools với workload "Desktop development with C++". `rust-toolchain.toml` tự chọn toolchain MSVC cho riêng folder này.
 
 Chạy các lệnh từ folder này:
 
@@ -33,7 +33,7 @@ cargo run --release --example offscreen -- bench 3840 2100 1.5  # đo thời gia
 cargo run --release --example offscreen -- wallpaper 10         # đổi hình nền thật 10 giây rồi hoàn tác
 ```
 
-Dữ liệu của app nằm ở `%LOCALAPPDATA%\WallpaperDesktop`: `thumbs` và `originals` là cache, `pictures` chứa hình nền đang dùng và lịch sử hoàn tác.
+Dữ liệu của app nằm ở `%LOCALAPPDATA%\WallpaperDesktop`: `thumbs` và `originals` là cache, `pictures` chứa hình nền đang dùng và lịch sử hoàn tác. Xóa `pictures` sẽ mất lịch sử hoàn tác và có thể mất ảnh đang hiện.
 
 ## Thêm nguồn ảnh
 
