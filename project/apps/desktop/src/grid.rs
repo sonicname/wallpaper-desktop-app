@@ -50,10 +50,15 @@ pub struct GridModel {
     cache: RefCell<VecDeque<CachedRow>>,
     notify: ModelNotify,
     near_end: Box<dyn Fn()>,
+    is_favorite: Box<dyn Fn(&Item) -> bool>,
 }
 
 impl GridModel {
-    pub fn new(loader: Loader, near_end: impl Fn() + 'static) -> Rc<Self> {
+    pub fn new(
+        loader: Loader,
+        near_end: impl Fn() + 'static,
+        is_favorite: impl Fn(&Item) -> bool + 'static,
+    ) -> Rc<Self> {
         let model = Rc::new(Self {
             loader,
             items: RefCell::default(),
@@ -70,6 +75,7 @@ impl GridModel {
             cache: RefCell::default(),
             notify: ModelNotify::default(),
             near_end: Box::new(near_end),
+            is_favorite: Box::new(is_favorite),
         });
         CURRENT.with(|c| *c.borrow_mut() = Rc::downgrade(&model));
         model
@@ -100,6 +106,18 @@ impl GridModel {
         self.scale.set(scale);
         self.rebuild(finished);
         true
+    }
+
+    /// Shows or hides the heart on a picture.
+    pub fn mark(&self, index: usize, favorite: bool) {
+        for row in self.cache.borrow().iter() {
+            let cells = row.cells.iter().enumerate();
+            let found = cells.filter(|(_, cell)| cell.index == index as i32);
+            for (position, mut cell) in found.collect::<Vec<_>>() {
+                cell.favorite = favorite;
+                row.cells.set_row_data(position, cell);
+            }
+        }
     }
 
     /// Gives back the memory of all pictures. They are loaded again when shown.
@@ -192,6 +210,7 @@ impl GridModel {
                 ready: false,
                 tint: tint(item),
                 label: size_label(item.size).into(),
+                favorite: (self.is_favorite)(item),
             });
             let Some(thumb) = item.best_thumb(target) else {
                 continue;

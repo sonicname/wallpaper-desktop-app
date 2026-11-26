@@ -1,0 +1,12 @@
+[package]
+name = "wallpaper-favorites"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+wallpaper-core.workspace = true
+wallpaper-host.workspace = true
+fastrand = "2"
+serde_json = "1"

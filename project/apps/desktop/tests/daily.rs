@@ -64,7 +64,7 @@ impl Provider for Fake {
             return Err(ProviderError::Network("down".into()));
         }
         let items = (0..30).map(|id| Item {
-            provider: "fake",
+            provider: "fake".into(),
             id: id.to_string(),
             size: Size::new(320, 180),
             image_url: url(id),
@@ -171,6 +171,10 @@ impl System for FakeSystem {
         *self.autostart.lock().unwrap()
     }
 
+    fn pick_folder(&self) -> Option<PathBuf> {
+        None
+    }
+
     fn set_autostart(&self, on: bool) -> Result<Autostart, String> {
         let state = if on { Autostart::On } else { Autostart::Off };
         *self.autostart.lock().unwrap() = state;
@@ -229,7 +233,7 @@ fn a_new_wallpaper_every_day() {
     });
     system.set(100, 9);
     let app = App::new(Config {
-        provider: provider.clone(),
+        providers: vec![provider.clone()],
         desktop: desktop.clone(),
         system: system.clone(),
         data_dir: Some(data.clone()),

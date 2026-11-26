@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 /// Wall clock time where the user is. Days are counted from 1970-01-01.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LocalTime {
@@ -37,6 +39,8 @@ pub trait System: Send + Sync {
     fn autostart(&self) -> Autostart;
     /// Returns the state afterwards, or why it could not be changed.
     fn set_autostart(&self, on: bool) -> Result<Autostart, String>;
+    /// Lets the user choose a folder. Blocks until they are done; nothing if they cancel.
+    fn pick_folder(&self) -> Option<PathBuf>;
 }
 
 #[cfg(test)]

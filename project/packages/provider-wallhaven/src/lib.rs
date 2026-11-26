@@ -207,7 +207,7 @@ fn item(w: Wallpaper) -> Item {
     let large = Size::new(432, 243);
     let uncut = (size.aspect() / large.aspect()).ln().abs() < 0.01;
     Item {
-        provider: ID,
+        provider: ID.into(),
         id: w.id,
         size,
         image_url: w.path,

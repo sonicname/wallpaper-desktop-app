@@ -5,6 +5,20 @@ use crate::Size;
 pub struct Ratio(pub u32, pub u32);
 
 impl Ratio {
+    /// Shapes of common screens, for providers that have no list of their own.
+    pub const COMMON: &'static [Ratio] = &[
+        Ratio(16, 9),
+        Ratio(16, 10),
+        Ratio(21, 9),
+        Ratio(32, 9),
+        Ratio(9, 16),
+        Ratio(10, 16),
+        Ratio(3, 2),
+        Ratio(4, 3),
+        Ratio(5, 4),
+        Ratio(1, 1),
+    ];
+
     pub fn value(self) -> f32 {
         self.0 as f32 / self.1 as f32
     }

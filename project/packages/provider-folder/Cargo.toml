@@ -1,0 +1,11 @@
+[package]
+name = "wallpaper-provider-folder"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+wallpaper-core.workspace = true
+fastrand = "2"
+image = { version = "0.25", default-features = false, features = ["bmp", "jpeg", "png", "webp"] }

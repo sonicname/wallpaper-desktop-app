@@ -1,7 +1,7 @@
 use std::{fmt, io::Cursor};
 
 use fast_image_resize::{PixelType, ResizeOptions, Resizer, images::Image};
-use image::{ImageReader, Limits};
+use image::{ExtendedColorType, ImageEncoder, ImageReader, Limits, codecs::jpeg::JpegEncoder};
 use wallpaper_core::{Rgb, Size};
 
 /// Tightly packed 8-bit RGB.
@@ -36,16 +36,7 @@ pub fn cover(
     if target.width == 0 || target.height == 0 {
         return Err(fail("empty target"));
     }
-    let mut reader = ImageReader::new(Cursor::new(bytes))
-        .with_guessed_format()
-        .map_err(fail)?;
-    let mut limits = Limits::default();
-    limits.max_alloc = Some(512 << 20);
-    reader.limits(limits);
-    let source = reader.decode().map_err(fail)?.into_rgb8();
-    let (width, height) = source.dimensions();
-    let source =
-        Image::from_vec_u8(width, height, source.into_raw(), PixelType::U8x3).map_err(fail)?;
+    let source = decode(bytes)?;
     let mut scaled = Image::new(target.width, target.height, PixelType::U8x3);
     let options = ResizeOptions::new().fit_into_destination(Some((0.5, 0.5)));
     Resizer::new()
@@ -57,6 +48,44 @@ pub fn cover(
     };
     round_corners(&mut pixels, radius, background);
     Ok(pixels)
+}
+
+/// The size of a picture, read from its header.
+pub fn dimensions(bytes: &[u8]) -> Option<Size> {
+    let reader = ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?;
+    let (width, height) = reader.into_dimensions().ok()?;
+    Some(Size::new(width, height))
+}
+
+/// A JPEG copy that fits into a square of `side` pixels. Never larger than the picture.
+pub fn thumbnail(bytes: &[u8], side: u32) -> Result<Vec<u8>, ImageError> {
+    let source = decode(bytes)?;
+    let shrink = (side as f32 / source.width().max(source.height()) as f32).min(1.0);
+    let scaled = |v: u32| ((v as f32 * shrink).round() as u32).max(1);
+    let (width, height) = (scaled(source.width()), scaled(source.height()));
+    let mut small = Image::new(width, height, PixelType::U8x3);
+    Resizer::new()
+        .resize(&source, &mut small, None)
+        .map_err(fail)?;
+    let mut jpeg = vec![];
+    JpegEncoder::new_with_quality(&mut jpeg, 85)
+        .write_image(small.buffer(), width, height, ExtendedColorType::Rgb8)
+        .map_err(fail)?;
+    Ok(jpeg)
+}
+
+fn decode(bytes: &[u8]) -> Result<Image<'static>, ImageError> {
+    let mut reader = ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(fail)?;
+    let mut limits = Limits::default();
+    limits.max_alloc = Some(512 << 20);
+    reader.limits(limits);
+    let source = reader.decode().map_err(fail)?.into_rgb8();
+    let (width, height) = source.dimensions();
+    Image::from_vec_u8(width, height, source.into_raw(), PixelType::U8x3).map_err(fail)
 }
 
 fn round_corners(pixels: &mut Pixels, radius: f32, background: Rgb) {
@@ -124,6 +153,18 @@ mod tests {
         }
         assert_eq!(at(20, 0), [255, 255, 255]);
         assert_eq!(at(20, 20), [255, 255, 255]);
+    }
+
+    #[test]
+    fn thumbnails_keep_the_shape_and_never_grow() {
+        let wide = png(400, 100, |x, _| [x as u8, 0, 0]);
+        assert_eq!(dimensions(&wide), Some(Size::new(400, 100)));
+        let small = thumbnail(&wide, 200).unwrap();
+        assert_eq!(dimensions(&small), Some(Size::new(200, 50)));
+        let same = thumbnail(&wide, 1000).unwrap();
+        assert_eq!(dimensions(&same), Some(Size::new(400, 100)));
+        assert!(thumbnail(b"not an image", 100).is_err());
+        assert_eq!(dimensions(b"not an image"), None);
     }
 
     #[test]

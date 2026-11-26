@@ -3,6 +3,7 @@
 
 mod autostart;
 mod desktop;
+mod dialog;
 mod instance;
 mod link;
 mod screens;
@@ -10,6 +11,7 @@ mod system;
 mod workspace;
 
 pub use desktop::WindowsDesktop;
+pub use dialog::reveal;
 pub use instance::{Instance, raise};
 pub use link::open_link;
 pub use system::WindowsSystem;
