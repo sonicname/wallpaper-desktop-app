@@ -1,3 +1,4 @@
+mod library;
 mod rotation;
 
 use std::{
@@ -19,7 +20,11 @@ use wallpaper_core::{
     Screen, Size, Sort, System,
 };
 use wallpaper_daily::Daily;
-use wallpaper_host::{DiskCache, Gallery, HostHttp, Pixels, cover};
+use wallpaper_favorites::Favorites;
+use wallpaper_host::{DiskCache, Gallery, Pixels, cover};
+use wallpaper_provider_folder::Folder;
+
+use library::Source;
 
 use crate::{
     AppWindow, Detail, Option as UiOption, Shade, Tray,
@@ -42,11 +47,12 @@ thread_local! {
 }
 
 pub struct Config {
-    pub provider: Arc<dyn Provider>,
+    /// Sources from the web, at least one. The first one is shown first.
+    pub providers: Vec<Arc<dyn Provider>>,
     pub desktop: Arc<dyn Desktop>,
     pub system: Arc<dyn System>,
-    /// Where pictures and the undo history are kept. Without it nothing is written, and the
-    /// wallpaper cannot be changed.
+    /// Where pictures, favorites and the undo history are kept. Without it nothing is written:
+    /// the wallpaper cannot be changed, and there are no favorites and no folder source.
     pub data_dir: Option<PathBuf>,
 }
 
@@ -113,8 +119,14 @@ struct Listing {
 
 struct Controller {
     window: AppWindow,
-    provider: Arc<dyn Provider>,
-    http: Arc<HostHttp>,
+    sources: Vec<Source>,
+    /// Index into `sources`.
+    current: StdCell<usize>,
+    /// The filters of every source, kept while another one is shown.
+    saved: RefCell<Vec<(ListRequest, bool)>>,
+    favorites: Option<Arc<Favorites>>,
+    folder: Option<Arc<Folder>>,
+    picking: StdCell<bool>,
     loader: Loader,
     grid: Rc<GridModel>,
     desktop: Arc<dyn Desktop>,
@@ -150,9 +162,23 @@ struct Controller {
 impl Controller {
     fn new(config: Config) -> Result<Rc<Self>, PlatformError> {
         let window = AppWindow::new()?;
-        let capabilities = config.provider.info().capabilities;
-        let http = Arc::new(HostHttp::new(config.provider.info().rate));
         let folder = |name| config.data_dir.as_ref().map(|dir| dir.join(name));
+        let favorites = folder("favorites")
+            .and_then(|dir| Favorites::open(dir).ok())
+            .map(Arc::new);
+        let local = folder("folder.txt").map(|file| Arc::new(Folder::open(file)));
+        let mut sources: Vec<Source> = config
+            .providers
+            .into_iter()
+            .map(|provider| Source::new(provider, false))
+            .collect();
+        if let Some(favorites) = &favorites {
+            sources.push(Source::new(favorites.clone(), true));
+        }
+        if let Some(local) = &local {
+            sources.push(Source::new(local.clone(), true));
+        }
+        assert!(!sources.is_empty(), "the app needs at least one source");
         let cache = |name, max_bytes| {
             let cache = DiskCache::open(folder(name)?).ok()?;
             let dir = cache.dir().to_owned();
@@ -160,7 +186,7 @@ impl Controller {
             Some(cache)
         };
         let loader = Loader::new(
-            http.clone(),
+            sources[0].http.clone(),
             cache("thumbs", THUMB_BYTES),
             cache("originals", ORIGINAL_BYTES),
         );
@@ -173,17 +199,30 @@ impl Controller {
         let screens = config.desktop.screens();
         let screen = screens.first().map(|s| s.size);
         // The model is asked for rows in the middle of a redraw, so load the page afterwards.
-        let grid = GridModel::new(loader.share(), || {
-            Timer::single_shot(Duration::ZERO, || with_current(Controller::load_more));
-        });
-        let sort = [Sort::Top, Sort::Random]
-            .into_iter()
-            .find(|s| capabilities.sorts.contains(s))
-            .or(capabilities.sorts.first().copied())
-            .unwrap_or(Sort::Random);
+        let hearts = favorites.clone();
+        let grid = GridModel::new(
+            loader.share(),
+            || Timer::single_shot(Duration::ZERO, || with_current(Controller::load_more)),
+            move |item| hearts.as_ref().is_some_and(|f| f.contains(item)),
+        );
+        // Pictures from the web are filtered to the screen from the start. The user's own are not.
+        let saved: Vec<(ListRequest, bool)> = sources
+            .iter()
+            .map(|source| {
+                let capabilities = source.provider.info().capabilities;
+                let can_fit = capabilities.min_size || !capabilities.ratios.is_empty();
+                let fit = !source.own && screen.is_some() && can_fit;
+                (source.first_request(), fit)
+            })
+            .collect();
+        let (request, fit_screen) = saved[0].clone();
         let controller = Rc::new(Self {
-            provider: config.provider,
-            http,
+            sources,
+            current: StdCell::new(0),
+            saved: RefCell::new(saved),
+            favorites,
+            folder: local,
+            picking: StdCell::new(false),
             loader,
             grid,
             desktop: config.desktop,
@@ -193,12 +232,8 @@ impl Controller {
             target: StdCell::new(None),
             changing: StdCell::new(false),
             listing: RefCell::new(Listing {
-                request: ListRequest {
-                    sort,
-                    ..Default::default()
-                },
-                fit_screen: screen.is_some()
-                    && (capabilities.min_size || !capabilities.ratios.is_empty()),
+                request,
+                fit_screen,
                 seen: HashSet::new(),
                 total: None,
                 loading: false,
@@ -231,13 +266,13 @@ impl Controller {
 
     fn connect(self: &Rc<Self>) {
         let window = &self.window;
-        window.set_can_search(self.provider.info().capabilities.search);
         window.set_gap(grid::GAP);
         window.set_rows(ModelRc::from(self.grid.clone()));
         window.set_can_apply(self.gallery.is_some());
         self.show_targets();
         self.show_undo();
         self.connect_daily();
+        self.connect_library();
         window.on_pick_target(|i| with_current(|c| c.pick_target(i as usize)));
         window.on_apply(|| with_current(Controller::apply));
         window.on_undo(|| with_current(Controller::undo));
@@ -253,13 +288,8 @@ impl Controller {
         window.on_pick_category(|i| with_current(|c| c.toggle_category(i as usize)));
         window.on_pick_shade(|i| {
             with_current(|c| {
-                let shade = c
-                    .provider
-                    .info()
-                    .capabilities
-                    .colors
-                    .get(i as usize)
-                    .copied();
+                let colors = c.provider().info().capabilities.colors;
+                let shade = colors.get(i as usize).copied();
                 c.change(|l| {
                     l.request.color = if l.request.color == shade {
                         None
@@ -285,7 +315,7 @@ impl Controller {
         window.on_open_source(|| {
             with_current(|c| {
                 if let Some(item) = c.grid.item(c.selected.get()) {
-                    wallpaper_platform_windows::open_link(&item.page_url);
+                    Controller::open_page(&item);
                 }
             })
         });
@@ -301,7 +331,7 @@ impl Controller {
     }
 
     fn sorts(&self) -> &'static [Sort] {
-        self.provider.info().capabilities.sorts
+        self.provider().info().capabilities.sorts
     }
 
     fn relayout(&self) {
@@ -326,7 +356,7 @@ impl Controller {
     }
 
     fn toggle_category(&self, index: usize) {
-        let all = self.provider.info().capabilities.categories;
+        let all = self.provider().info().capabilities.categories;
         let Some(picked) = all.get(index) else { return };
         self.change(|l| toggle(&mut l.request.categories, *picked, all));
     }
@@ -339,7 +369,7 @@ impl Controller {
             ..listing.request.clone()
         };
         if let Some(screen) = self.screen.filter(|_| listing.fit_screen) {
-            let capabilities = self.provider.info().capabilities;
+            let capabilities = self.provider().info().capabilities;
             request.min_size = capabilities.min_size.then_some(screen);
             request.ratios = Ratio::nearest(screen, capabilities.ratios)
                 .into_iter()
@@ -382,7 +412,12 @@ impl Controller {
         self.show_status(None);
         let mut request = self.request();
         request.cursor = self.listing.borrow().request.cursor.clone();
-        let (provider, http, epoch) = (self.provider.clone(), self.http.clone(), self.epoch.get());
+        let source = self.source();
+        let (provider, http, epoch) = (
+            source.provider.clone(),
+            source.http.clone(),
+            self.epoch.get(),
+        );
         thread::spawn(move || {
             let result = provider.list(&request, &*http);
             // Fails only while the app is closing.
@@ -446,7 +481,12 @@ impl Controller {
         let empty = self.grid.len() == 0;
         let message = match error {
             Some(error) => text::error(error),
-            None if empty && listing.finished => "Không có ảnh nào khớp bộ lọc.".into(),
+            // The window offers to choose a folder instead.
+            None if self.needs_folder() => String::new(),
+            None if empty && listing.finished => self
+                .empty_reason()
+                .unwrap_or("Không có ảnh nào khớp bộ lọc.")
+                .into(),
             None => String::new(),
         };
         // With pictures on screen an error goes to the summary instead of covering them.
@@ -466,7 +506,7 @@ impl Controller {
     }
 
     fn show_filters(&self) {
-        let capabilities = self.provider.info().capabilities;
+        let capabilities = self.provider().info().capabilities;
         let listing = self.listing.borrow();
         let request = &listing.request;
         let option = |label: &str, on| UiOption {
@@ -513,7 +553,9 @@ impl Controller {
             fit_note: fit.note.into(),
             fit_good: fit.good,
             file: text::file(&item.mime, item.file_bytes).into(),
-            source: format!("{} · {}", self.provider.info().name, item.id).into(),
+            source: format!("{} · {}", self.source_name(&item), Self::short_id(&item)).into(),
+            favorite: self.is_favorite(&item),
+            page_label: Self::page_label(&item).into(),
             tint: grid::tint(&item),
             palette: model(item.colors.iter().map(|c| grid::color(*c))),
         });

@@ -2,7 +2,7 @@
 //! ones from the sources belong to their authors. Touches neither the network nor the desktop.
 //!
 //! ```text
-//! cargo run --release --example readme -- <folder>
+//! cargo run --release --example readme -- <folder> [folder for more states] [width height scale]
 //! ```
 
 #[path = "support/stage.rs"]
@@ -238,6 +238,10 @@ impl System for Morning {
         Autostart::On
     }
 
+    fn pick_folder(&self) -> Option<PathBuf> {
+        None
+    }
+
     fn set_autostart(&self, _: bool) -> Result<Autostart, String> {
         Ok(Autostart::On)
     }
@@ -266,7 +270,8 @@ fn main() {
             thumbs.put(&url("small", id), &scene(id, SMALL)).unwrap();
             originals.put(&url("full", id), &full).unwrap();
             Item {
-                provider: "drawn",
+                // The id of the provider below, which borrows the filters of Wallhaven.
+                provider: Wallhaven.info().id.into(),
                 id: format!("{id:03}"),
                 size: FULL,
                 image_url: url("full", id),
@@ -290,9 +295,18 @@ fn main() {
         ..*Wallhaven.info()
     };
 
-    let mut stage = Stage::new(1920, 1200, 1.5);
+    let more = env::args().nth(2).map(PathBuf::from);
+    let number = |at: usize, default: f32| {
+        let given = env::args().nth(at);
+        given.map_or(default, |text| text.parse().expect("a number"))
+    };
+    let mut stage = Stage::new(
+        number(3, 1920.0) as u32,
+        number(4, 1200.0) as u32,
+        number(5, 1.5),
+    );
     let app = App::new(Config {
-        provider: Arc::new(Drawn { info, items }),
+        providers: vec![Arc::new(Drawn { info, items })],
         desktop: Arc::new(MemoryDesktop(Mutex::new(Backdrop {
             mode: BackdropMode::Picture,
             placement: 4,
@@ -315,10 +329,16 @@ fn main() {
             && (0..4).all(|r| rows.row_data(r).unwrap().cells.iter().all(|c| c.ready))
     };
     assert!(stage.run_until(WAIT, loaded));
+    for favorite in [1, 5, 6] {
+        window.invoke_open(favorite);
+        window.invoke_toggle_favorite();
+        assert!(stage.run_until(WAIT, || window.get_detail().favorite));
+    }
+    window.set_detail_open(false);
     stage.run_for(Duration::from_millis(500));
     save(&stage, &folder.join("browse.png"));
 
-    window.invoke_open(0);
+    window.invoke_open(1);
     assert!(stage.run_until(WAIT, || window.get_picture_sharp()));
     stage.run_for(Duration::from_millis(500));
     save(&stage, &folder.join("preview.png"));
@@ -340,6 +360,20 @@ fn main() {
     window.invoke_open_daily();
     stage.run_for(Duration::from_millis(500));
     save(&stage, &folder.join("daily.png"));
+
+    if let Some(more) = more {
+        fs::create_dir_all(&more).unwrap();
+        window.set_daily_open(false);
+        window.invoke_pick_source(1);
+        assert!(stage.run_until(WAIT, || !window.get_busy()
+            && window.get_rows().row_count() > 0));
+        stage.run_for(Duration::from_millis(800));
+        save(&stage, &more.join("favorites.png"));
+        window.invoke_pick_source(2);
+        assert!(stage.run_until(WAIT, || window.get_needs_folder() && !window.get_busy()));
+        stage.run_for(Duration::from_millis(300));
+        save(&stage, &more.join("folder.png"));
+    }
 
     drop(app);
     let _ = fs::remove_dir_all(&data);

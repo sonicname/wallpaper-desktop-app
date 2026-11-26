@@ -70,7 +70,7 @@ fn main() {
 
     let mut stage = Stage::new(width, height, scale);
     let app = App::new(Config {
-        provider: Arc::new(Wallhaven),
+        providers: vec![Arc::new(Wallhaven)],
         desktop: Arc::new(WindowsDesktop),
         // Never added to the startup list, because nothing here switches it on.
         system: Arc::new(WindowsSystem::new("WallpaperOffscreen", String::new())),
@@ -171,6 +171,7 @@ fn run_shots(stage: &mut Stage, window: &AppWindow, folder: &Path) {
         problem: false,
         autostart: true,
         autostart_note: "App chạy ẩn dưới khay sau khi đăng nhập.".into(),
+        sources: options(&["Wallhaven", "Yêu thích", "Thư mục"], 0),
         sorts: options(&["Ngẫu nhiên", "Nổi bật", "Mới nhất", "Yêu thích nhất"], 1),
         categories: options(&["Tổng hợp", "Anime", "Con người"], 0),
     });

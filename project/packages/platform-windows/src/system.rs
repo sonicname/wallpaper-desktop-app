@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use wallpaper_core::{Autostart, LocalTime, System};
 use windows::Win32::{
     System::SystemInformation::GetLocalTime,
@@ -7,7 +9,7 @@ use windows::Win32::{
     },
 };
 
-use crate::autostart::Startup;
+use crate::{autostart::Startup, dialog};
 
 pub struct WindowsSystem {
     startup: Startup,
@@ -54,6 +56,10 @@ impl System for WindowsSystem {
 
     fn set_autostart(&self, on: bool) -> Result<Autostart, String> {
         self.startup.set(on)
+    }
+
+    fn pick_folder(&self) -> Option<PathBuf> {
+        dialog::pick_folder()
     }
 }
 

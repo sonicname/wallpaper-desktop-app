@@ -260,7 +260,7 @@ fn with_shell<T: Send>(
 
 /// Runs `work` on a thread of its own, because the caller's thread may already have chosen
 /// another COM apartment.
-fn with_com<T: Send>(
+pub(crate) fn with_com<T: Send>(
     work: impl FnOnce() -> Result<T, DesktopError> + Send,
 ) -> Result<T, DesktopError> {
     let run = || {

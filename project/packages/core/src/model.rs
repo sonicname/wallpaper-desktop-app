@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,7 +18,7 @@ impl Size {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rgb(pub u8, pub u8, pub u8);
 
 impl Rgb {
@@ -48,24 +50,27 @@ pub enum Category {
 }
 
 /// How a thumbnail relates to the full image.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ThumbCrop {
     Whole,
     Cropped,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Thumb {
+    /// A web address, or the path of a file on this computer.
     pub url: String,
     pub size: Size,
     pub crop: ThumbCrop,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Item {
-    pub provider: &'static str,
+    /// The id of the provider this picture first came from.
+    pub provider: String,
     pub id: String,
     pub size: Size,
+    /// A web address, or the path of a file on this computer.
     pub image_url: String,
     pub page_url: String,
     pub file_bytes: u64,
@@ -74,7 +79,23 @@ pub struct Item {
     pub thumbs: Vec<Thumb>,
 }
 
+/// The file behind a location, if it is a path on this computer and not a web address.
+pub fn local_path(location: &str) -> Option<&Path> {
+    let path = Path::new(location);
+    path.is_absolute().then_some(path)
+}
+
 impl Item {
+    /// Identifies the picture across providers and restarts.
+    pub fn key(&self) -> String {
+        format!("{}:{}", self.provider, self.id)
+    }
+
+    /// The file of the full picture, if it is on this computer.
+    pub fn local_file(&self) -> Option<&Path> {
+        local_path(&self.image_url)
+    }
+
     /// Picks a thumbnail for a cell of `target` pixels. A cropped thumbnail is only used when
     /// its shape is close to the cell, so that portrait images are not cut twice.
     pub fn best_thumb(&self, target: Size) -> Option<&Thumb> {
@@ -111,7 +132,7 @@ mod tests {
             crop,
         };
         Item {
-            provider: "test",
+            provider: "test".into(),
             id: "1".into(),
             size,
             image_url: String::new(),
@@ -142,6 +163,14 @@ mod tests {
     fn oversized_cell_falls_back_to_the_largest_thumbnail() {
         let found = item(Size::new(3840, 2160));
         assert_eq!(found.best_thumb(Size::new(800, 450)).unwrap().url, "large");
+    }
+
+    #[test]
+    fn tells_files_from_web_addresses() {
+        assert!(local_path("https://w.wallhaven.cc/full/aa/x.jpg").is_none());
+        assert!(local_path("picture.jpg").is_none());
+        let here = std::env::temp_dir().join("picture.jpg");
+        assert_eq!(local_path(here.to_str().unwrap()), Some(here.as_path()));
     }
 
     #[test]

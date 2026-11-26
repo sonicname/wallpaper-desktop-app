@@ -8,8 +8,10 @@ publish.workspace = true
 [dependencies]
 wallpaper-core.workspace = true
 wallpaper-daily.workspace = true
+wallpaper-favorites.workspace = true
 wallpaper-host.workspace = true
 wallpaper-platform-windows.workspace = true
+wallpaper-provider-folder.workspace = true
 wallpaper-provider-wallhaven.workspace = true
 fastrand = "2"
 raw-window-handle = "0.6"

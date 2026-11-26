@@ -223,7 +223,7 @@ fn size_of(path: &Path) -> (u32, u32) {
 
 fn items(ids: std::ops::Range<u32>) -> Vec<Item> {
     ids.map(|id| Item {
-        provider: "fake",
+        provider: "fake".into(),
         id: id.to_string(),
         size: Size::new(2560, 1440),
         image_url: original_url(&id.to_string()),
@@ -263,7 +263,7 @@ fn browsing() {
     fs::write(&mine, b"the wallpaper from before").unwrap();
     let desktop = Arc::new(FakeDesktop::new(&mine));
     let app = App::new(Config {
-        provider: fake.clone(),
+        providers: vec![fake.clone()],
         desktop: desktop.clone(),
         system: Arc::new(WindowsSystem::new("WallpaperFlowTest", String::new())),
         data_dir: Some(data.clone()),

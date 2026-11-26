@@ -2,13 +2,14 @@ import { Theme } from "theme.slint";
 
 export component Icon inherits Path {
     in property <color> color: Theme.muted;
+    in property <bool> filled;
     width: 16px;
     height: 16px;
     viewbox-width: 16;
     viewbox-height: 16;
     stroke: color;
     stroke-width: 1.5px;
-    fill: transparent;
+    fill: filled ? color : transparent;
 }
 
 component Pressable inherits Rectangle {
@@ -45,6 +46,37 @@ component Pressable inherits Rectangle {
         enabled: root.enabled;
         mouse-cursor: root.enabled ? pointer : default;
         clicked => { root.activated(); }
+    }
+}
+
+// One of a few views to switch between.
+export component Tab inherits Pressable {
+    in property <string> text;
+    label: text;
+    checkable: true;
+    height: 40px;
+    horizontal-stretch: 0;
+    min-width: caption.preferred-width + 20px;
+    border-radius: 8px;
+    border-width: root.focused ? 2px : 0px;
+    border-color: Theme.text;
+    background: root.hovered && !root.checked ? Theme.surface : transparent;
+
+    caption := Text {
+        text: root.text;
+        color: root.checked ? Theme.text : Theme.muted;
+        font-size: 15px;
+        font-weight: root.checked ? 600 : 400;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    Rectangle {
+        y: parent.height - 5px;
+        width: root.checked ? caption.preferred-width : 0px;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.accent;
+        animate width { duration: Theme.quick; }
     }
 }
 
@@ -134,6 +166,8 @@ export component Switch inherits Pressable {
 
 export component IconButton inherits Pressable {
     in property <string> commands;
+    // Drawn filled, in the accent colour.
+    in property <bool> active;
     width: 40px;
     height: 40px;
     border-radius: 20px;
@@ -144,13 +178,14 @@ export component IconButton inherits Pressable {
 
     Icon {
         commands: root.commands;
-        color: root.enabled ? Theme.text : Theme.line;
+        filled: root.active;
+        color: !root.enabled ? Theme.line : root.active ? Theme.accent : Theme.text;
     }
 }
 
 export component SearchField inherits Rectangle {
     in property <string> placeholder;
-    out property <string> text <=> input.text;
+    in-out property <string> text <=> input.text;
     callback submitted(string);
 
     height: 40px;

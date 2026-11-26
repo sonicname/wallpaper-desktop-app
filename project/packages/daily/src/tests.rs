@@ -62,7 +62,7 @@ impl Http for Offline {
 
 fn item(id: u32, size: Size) -> Item {
     Item {
-        provider: "fake",
+        provider: "fake".into(),
         id: id.to_string(),
         size,
         image_url: String::new(),
@@ -156,9 +156,8 @@ fn never_repeats_until_everything_was_shown() {
         assert!(seen.insert(key), "repeated on day {day}");
     }
     assert_eq!(seen.len(), 40);
-    // Then it starts over instead of stopping for good.
+    // Then it starts over at once, instead of stopping for good.
     assert!(next(&daily, 40).is_none());
-    assert_eq!(refill(&daily, &provider, SCREEN), Ok(0));
     assert_eq!(refill(&daily, &provider, SCREEN), Ok(READY));
 }
 
@@ -311,4 +310,31 @@ fn a_clock_that_was_ahead_does_not_stop_the_changes() {
     };
     assert!(!daily.is_due(morning(100)), "today had its change");
     assert!(daily.is_due(morning(101)));
+}
+
+#[test]
+fn a_handful_of_pictures_goes_round_forever() {
+    let folder = Folder::new("handful");
+    let daily = Daily::open(&folder.0).unwrap();
+    let provider = fake(2);
+    let mut shown = vec![];
+    for day in 0..8 {
+        refill(&daily, &provider, SCREEN).unwrap();
+        shown.push(next(&daily, day).expect("a picture every day"));
+    }
+    for pair in shown.windows(2) {
+        assert_ne!(pair[0], pair[1], "{shown:?}");
+    }
+}
+
+#[test]
+fn another_source_drops_the_prepared_pictures() {
+    let folder = Folder::new("source");
+    let daily = Daily::open(&folder.0).unwrap();
+    refill(&daily, &fake(10), SCREEN).unwrap();
+    daily.configure(|s| s.source = "folder".into()).unwrap();
+    assert_eq!(daily.count(SCREEN), 0);
+    refill(&daily, &fake(10), SCREEN).unwrap();
+    daily.restart().unwrap();
+    assert_eq!(daily.count(SCREEN), 0);
 }

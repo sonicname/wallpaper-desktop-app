@@ -1,5 +1,5 @@
 import { Theme } from "theme.slint";
-import { Button, Chip, IconButton, SearchField, Swatch } from "controls.slint";
+import { Button, Chip, IconButton, SearchField, Swatch, Tab } from "controls.slint";
 import { Cell, Grid, Row } from "grid.slint";
 import { DailyState, DailyView } from "daily.slint";
 import { Detail, DetailView, Option } from "detail.slint";
@@ -25,6 +25,16 @@ export component AppWindow inherits Window {
 
     in property <image> app-icon;
     in property <bool> can-search;
+    in property <string> search-hint;
+    in-out property <string> search-text <=> search.text;
+    in property <[Option]> sources;
+    // The name of the chosen folder, while the folder source is shown.
+    in property <string> folder-label;
+    in property <bool> needs-folder;
+    in property <bool> can-favorite;
+    callback pick-source(int);
+    callback pick-folder();
+    callback toggle-favorite();
     in property <[Option]> sorts;
     in property <[Option]> categories;
     in property <[Shade]> shades;
@@ -80,6 +90,7 @@ export component AppWindow inherits Window {
     callback toggle-paused();
     callback toggle-autostart();
     callback shift-hour(int);
+    callback pick-daily-source(int);
     callback pick-daily-sort(int);
     callback pick-daily-category(int);
     callback next-daily();
@@ -96,12 +107,20 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             spacing: 16px;
             height: 40px;
-            SearchField {
+            if sources.length > 1: HorizontalLayout {
+                spacing: 2px;
+                for source[i] in sources: Tab {
+                    text: source.label;
+                    checked: source.on;
+                    activated => { root.pick-source(i); }
+                }
+            }
+            search := SearchField {
                 visible: can-search;
-                min-width: 240px;
+                min-width: 200px;
                 max-width: 420px;
                 horizontal-stretch: 1;
-                placeholder: "Tìm hình nền, ví dụ: mountain, city night";
+                placeholder: search-hint;
                 submitted(text) => { root.search(text); }
             }
             HorizontalLayout {
@@ -138,13 +157,19 @@ export component AppWindow inherits Window {
         HorizontalLayout {
             spacing: 8px;
             height: 32px;
+            if folder-label != "": Chip {
+                quiet: true;
+                text: folder-label;
+                activated => { root.pick-folder(); }
+            }
+            if folder-label != "": Rectangle { width: 1px; background: Theme.line; }
             if screen-fit.label != "": Chip {
                 quiet: true;
                 text: screen-fit.label;
                 checked: screen-fit.on;
                 activated => { root.toggle-screen-fit(); }
             }
-            if screen-fit.label != "": Rectangle { width: 1px; background: Theme.line; }
+            if screen-fit.label != "" && categories.length > 0: Rectangle { width: 1px; background: Theme.line; }
             for option[i] in categories: Chip {
                 text: option.label;
                 quiet: true;
@@ -182,6 +207,21 @@ export component AppWindow inherits Window {
                 scroll <=> root.scroll;
                 activated(index) => { root.open(index); }
             }
+            if needs-folder: VerticalLayout {
+                alignment: center;
+                spacing: 16px;
+                Text {
+                    text: "Chọn một thư mục ảnh trên máy để xem và đặt làm hình nền.";
+                    color: Theme.text;
+                    font-size: 16px;
+                    horizontal-alignment: center;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    alignment: center;
+                    Button { width: 160px; text: "Chọn thư mục"; primary: true; activated => { root.pick-folder(); } }
+                }
+            }
             if message != "": VerticalLayout {
                 alignment: center;
                 spacing: 16px;
@@ -216,6 +256,8 @@ export component AppWindow inherits Window {
         warning: root.mode-warning;
         can-apply: root.can-apply;
         changing: root.changing;
+        can-favorite: root.can-favorite;
+        toggle-favorite => { root.toggle-favorite(); }
         pick-target(i) => { root.pick-target(i); }
         apply => { root.apply(); }
         close => { root.detail-open = false; }
@@ -234,6 +276,7 @@ export component AppWindow inherits Window {
         toggle-paused => { root.toggle-paused(); }
         toggle-autostart => { root.toggle-autostart(); }
         shift-hour(by) => { root.shift-hour(by); }
+        pick-source(i) => { root.pick-daily-source(i); }
         pick-sort(i) => { root.pick-daily-sort(i); }
         pick-category(i) => { root.pick-daily-category(i); }
         next => { root.next-daily(); }

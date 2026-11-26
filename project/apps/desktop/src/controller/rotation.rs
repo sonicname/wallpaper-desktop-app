@@ -48,16 +48,25 @@ impl Controller {
         });
         window.on_pick_daily_sort(|i| {
             with_current(|c| {
-                if let Some(sort) = c.sorts().get(i as usize) {
+                let sorts = c.daily_source().provider.info().capabilities.sorts;
+                if let Some(sort) = sorts.get(i as usize) {
                     c.configure(|s| s.sort = *sort);
                 }
             })
         });
         window.on_pick_daily_category(|i| {
             with_current(|c| {
-                let all = c.provider.info().capabilities.categories;
+                let all = c.daily_source().provider.info().capabilities.categories;
                 if let Some(picked) = all.get(i as usize) {
                     c.configure(|s| super::toggle(&mut s.categories, *picked, all));
+                }
+            })
+        });
+        window.on_pick_daily_source(|i| {
+            with_current(|c| {
+                if let Some(source) = c.sources.get(i as usize) {
+                    let id = source.provider.info().id;
+                    c.configure(|s| s.source = id.into());
                 }
             })
         });
@@ -238,9 +247,10 @@ impl Controller {
             return;
         }
         self.refilling.set(true);
+        let from = self.daily_source();
         let (provider, http, loader) = (
-            self.provider.clone(),
-            self.http.clone(),
+            from.provider.clone(),
+            from.http.clone(),
             self.loader.share(),
         );
         thread::spawn(move || {
@@ -282,6 +292,39 @@ impl Controller {
         } else if self.has_ready() {
             self.tick();
         }
+        self.show_daily();
+    }
+
+    /// Where the daily pictures come from: the source in the settings, or the first one.
+    pub(super) fn daily_source(&self) -> &super::library::Source {
+        let wanted = self.daily.as_ref().map(|d| d.settings().source);
+        let chosen = |s: &&super::library::Source| Some(s.provider.info().id) == wanted.as_deref();
+        self.sources.iter().find(chosen).unwrap_or(&self.sources[0])
+    }
+
+    /// The pictures of a source changed, which matters if the daily change takes them from it.
+    pub(super) fn source_changed(&self, id: &str) {
+        let Some(daily) = &self.daily else { return };
+        if self.daily_source().provider.info().id != id {
+            return;
+        }
+        if id == wallpaper_provider_folder::ID {
+            // Another folder: what was prepared belongs to the old one.
+            let _ = daily.restart();
+        } else if let Some(favorites) = &self.favorites {
+            // A picture that is no favorite any more must not be shown tomorrow.
+            for size in self.sizes() {
+                while let Some(ready) = daily.ready(size) {
+                    if favorites.contains_key(&ready.key) {
+                        break;
+                    }
+                    let _ = daily.drop_ready(&ready.key);
+                }
+            }
+        }
+        self.refill_after.set(None);
+        *self.refill_error.borrow_mut() = None;
+        self.tick();
         self.show_daily();
     }
 
@@ -353,8 +396,13 @@ impl Controller {
             label: label.into(),
             on,
         };
-        let all = self.provider.info().capabilities.categories;
+        let from = self.daily_source().provider.info();
+        let all = from.capabilities.categories;
         let on = enabled_categories(&settings.categories, all);
+        let sorts = from.capabilities.sorts;
+        // A sort the source does not have falls back to its first one.
+        let sort = Some(settings.sort).filter(|s| sorts.contains(s));
+        let sort = sort.or(sorts.first().copied());
         let autostart = self.system.autostart();
         self.window.set_daily(DailyState {
             enabled: settings.enabled,
@@ -364,10 +412,15 @@ impl Controller {
             problem,
             autostart: autostart != Autostart::Off,
             autostart_note: text::autostart(autostart, settings.enabled).into(),
-            sorts: model(
-                self.sorts()
+            sources: model(
+                self.sources
                     .iter()
-                    .map(|s| option(text::sort(*s), *s == settings.sort)),
+                    .map(|s| option(s.provider.info().name, s.provider.info().id == from.id)),
+            ),
+            sorts: model(
+                sorts
+                    .iter()
+                    .map(|s| option(text::sort(*s), Some(*s) == sort)),
             ),
             categories: model(
                 all.iter()

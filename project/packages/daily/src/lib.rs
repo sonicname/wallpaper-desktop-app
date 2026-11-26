@@ -39,6 +39,8 @@ pub struct Settings {
     pub sort: Sort,
     /// Empty means every category.
     pub categories: Vec<Category>,
+    /// The id of the provider to take pictures from. Empty means the first one.
+    pub source: String,
 }
 
 impl Default for Settings {
@@ -49,6 +51,7 @@ impl Default for Settings {
             change_at: 8 * 60,
             sort: Sort::Top,
             categories: vec![],
+            source: String::new(),
         }
     }
 }
@@ -114,16 +117,29 @@ impl Daily {
             let before = data.settings.clone();
             change(&mut data.settings);
             let after = &data.settings;
-            if (before.sort, &before.categories) != (after.sort, &after.categories) {
-                let dropped: Vec<Ready> = std::mem::take(&mut data.queue);
-                // They were never shown, so they may come back.
-                data.seen
-                    .retain(|key| dropped.iter().all(|ready| ready.key != *key));
-                for ready in dropped {
-                    let _ = fs::remove_file(ready.path);
-                }
+            let filters = |s: &Settings| (s.sort, s.categories.clone(), s.source.clone());
+            if filters(&before) != filters(after) {
+                drop_queue(data);
             }
         })
+    }
+
+    /// Drops one prepared picture, because it must not be shown after all.
+    pub fn drop_ready(&self, key: &str) -> io::Result<()> {
+        self.edit(|data| {
+            let (dropped, kept): (Vec<Ready>, Vec<Ready>) = std::mem::take(&mut data.queue)
+                .into_iter()
+                .partition(|ready| ready.key == key);
+            data.queue = kept;
+            for ready in dropped {
+                let _ = fs::remove_file(ready.path);
+            }
+        })
+    }
+
+    /// Drops the prepared pictures, because the source has other pictures now.
+    pub fn restart(&self) -> io::Result<()> {
+        self.edit(drop_queue)
     }
 
     pub fn is_due(&self, now: LocalTime) -> bool {
@@ -203,15 +219,18 @@ impl Daily {
         if needed == 0 {
             return Ok(0);
         }
-        let mut candidates = self.candidates(size, source, self.settings().sort)?;
-        if candidates.is_empty() {
-            candidates = self.candidates(size, source, Sort::Random)?;
+        let mut candidates = self.all_candidates(size, source)?;
+        if candidates.is_empty() && self.count(size) == 0 {
+            // Everything was shown. Let the older half come back, once the last one is used up.
+            let recycled = self.edit(|data| {
+                let half = data.seen.len().div_ceil(2);
+                data.seen.drain(..half).count()
+            });
+            if recycled.is_ok_and(|count| count > 0) {
+                candidates = self.all_candidates(size, source)?;
+            }
         }
         if candidates.is_empty() {
-            // Everything was shown. Let the older half come back, once the last one is used up.
-            if self.count(size) == 0 {
-                let _ = self.edit(|data| drop(data.seen.drain(..data.seen.len().div_ceil(2))));
-            }
             return Ok(0);
         }
         random.shuffle(&mut candidates);
@@ -224,13 +243,25 @@ impl Daily {
                 Ok(true) => added += 1,
                 // This picture is broken; another one will do.
                 Ok(false) => {}
-                Err(ProviderError::BadResponse(_) | ProviderError::Status(_)) => {}
+                Err(
+                    ProviderError::BadResponse(_)
+                    | ProviderError::Status(_)
+                    | ProviderError::NotFound,
+                ) => {}
                 // Without a connection the others would fail as well.
                 Err(_) if added > 0 => break,
                 Err(error) => return Err(error),
             }
         }
         Ok(added)
+    }
+
+    fn all_candidates(&self, size: Size, source: &Source) -> Result<Vec<Item>, ProviderError> {
+        let candidates = self.candidates(size, source, self.settings().sort)?;
+        if candidates.is_empty() {
+            return self.candidates(size, source, Sort::Random);
+        }
+        Ok(candidates)
     }
 
     fn candidates(
@@ -327,8 +358,18 @@ impl Daily {
     }
 }
 
+fn drop_queue(data: &mut Data) {
+    let dropped: Vec<Ready> = std::mem::take(&mut data.queue);
+    // They were never shown, so they may come back.
+    data.seen
+        .retain(|key| dropped.iter().all(|ready| ready.key != *key));
+    for ready in dropped {
+        let _ = fs::remove_file(ready.path);
+    }
+}
+
 fn key(item: &Item) -> String {
-    format!("{}:{}", item.provider, item.id)
+    item.key()
 }
 
 fn trim<T>(list: &mut Vec<T>, max: usize) {

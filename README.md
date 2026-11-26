@@ -21,10 +21,13 @@ Giao diện thật; các hình nền trong ảnh do chương trình tự vẽ đ
 - Hoàn tác tối đa 10 bước cho mỗi virtual desktop, về được hình nền trước khi dùng app. Riêng Spotlight và trình chiếu của Windows thì không bật lại được
 - Đổi ảnh ngẫu nhiên mỗi ngày: không lặp, tải sẵn để đổi được khi mất mạng, hoãn khi đang chơi game hoặc trình chiếu
 - Chạy dưới khay hệ thống, tùy chọn khởi động cùng Windows
+- Yêu thích: giữ lại ảnh từ mọi nguồn, xem được cả khi mất mạng
+- Ảnh từ thư mục trên máy: duyệt, tìm theo tên, đặt làm hình nền
+- Đổi hằng ngày lấy ảnh từ Wallhaven, từ yêu thích hoặc từ thư mục
 
 ## Chưa có
 
-- Yêu thích, ảnh từ thư mục trên máy, chọn giữa nhiều nguồn ảnh
+- Nguồn ảnh trên mạng thứ hai
 - Bộ cài đặt và tự cập nhật
 
 ## Chạy thử

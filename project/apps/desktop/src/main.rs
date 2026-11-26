@@ -21,7 +21,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .select()?;
     let data_dir = env::var_os("LOCALAPPDATA").map(|dir| PathBuf::from(dir).join(NAME));
     let app = App::new(Config {
-        provider: Arc::new(Wallhaven),
+        // Sources from the web. Favorites and the folder on this computer are added by the app.
+        providers: vec![Arc::new(Wallhaven)],
         desktop: Arc::new(WindowsDesktop),
         system: Arc::new(WindowsSystem::new(
             NAME,

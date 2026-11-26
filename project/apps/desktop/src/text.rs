@@ -44,6 +44,9 @@ pub fn error(error: &ProviderError) -> String {
         }
         ProviderError::Status(code) => format!("Nguồn ảnh báo lỗi {code}."),
         ProviderError::BadResponse(_) => "Nguồn ảnh trả về dữ liệu không đọc được.".into(),
+        ProviderError::NotFound => {
+            "Không tìm thấy tệp hoặc thư mục. Có thể đã bị xóa hoặc di chuyển.".into()
+        }
     }
 }
 

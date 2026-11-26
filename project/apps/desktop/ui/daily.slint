@@ -10,6 +10,7 @@ export struct DailyState {
     problem: bool,
     autostart: bool,
     autostart-note: string,
+    sources: [Option],
     sorts: [Option],
     categories: [Option],
 }
@@ -81,6 +82,7 @@ export component DailyView inherits Rectangle {
     callback toggle-paused();
     callback toggle-autostart();
     callback shift-hour(int);
+    callback pick-source(int);
     callback pick-sort(int);
     callback pick-category(int);
     callback next();
@@ -192,9 +194,17 @@ export component DailyView inherits Rectangle {
                         on: state.autostart;
                         toggled => { root.toggle-autostart(); }
                     }
-                    if state.enabled: VerticalLayout {
+                    if state.enabled && state.sources.length > 1: VerticalLayout {
                         spacing: 10px;
-                        Text { text: "Chọn ảnh từ"; color: Theme.text; font-size: 14px; font-weight: 600; }
+                        Text { text: "Nguồn ảnh"; color: Theme.text; font-size: 14px; font-weight: 600; }
+                        Choices {
+                            options: state.sources;
+                            picked(i) => { root.pick-source(i); }
+                        }
+                    }
+                    if state.enabled && state.sorts.length > 1: VerticalLayout {
+                        spacing: 10px;
+                        Text { text: "Ưu tiên"; color: Theme.text; font-size: 14px; font-weight: 600; }
                         Choices {
                             options: state.sorts;
                             picked(i) => { root.pick-sort(i); }
