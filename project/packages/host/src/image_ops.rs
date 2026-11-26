@@ -1,6 +1,6 @@
 use std::{fmt, io::Cursor};
 
-use fast_image_resize::{PixelType, ResizeOptions, Resizer, images::Image};
+use fast_image_resize::{FilterType, PixelType, ResizeAlg, ResizeOptions, Resizer, images::Image};
 use image::{ExtendedColorType, ImageEncoder, ImageReader, Limits, codecs::jpeg::JpegEncoder};
 use wallpaper_core::{Rgb, Size};
 
@@ -48,6 +48,32 @@ pub fn cover(
     };
     round_corners(&mut pixels, radius, background);
     Ok(pixels)
+}
+
+/// A soft, dark impression of a picture that fills `target`, to put behind other things.
+/// `toward` is the colour it fades into.
+pub fn ambient(bytes: &[u8], target: Size, toward: Rgb) -> Result<Pixels, ImageError> {
+    if target.width == 0 || target.height == 0 {
+        return Err(fail("empty target"));
+    }
+    let source = decode(bytes)?;
+    // A handful of pixels is all that is kept; scaling them up again is the blur.
+    let rows = (12.0 / target.aspect()).round().clamp(2.0, 48.0) as u32;
+    let mut few = Image::new(12, rows, PixelType::U8x3);
+    let crop = ResizeOptions::new().fit_into_destination(Some((0.5, 0.5)));
+    let mut resizer = Resizer::new();
+    resizer.resize(&source, &mut few, &crop).map_err(fail)?;
+    let mut soft = Image::new(target.width, target.height, PixelType::U8x3);
+    let smooth = ResizeOptions::new().resize_alg(ResizeAlg::Convolution(FilterType::CatmullRom));
+    resizer.resize(&few, &mut soft, &smooth).map_err(fail)?;
+    let mut rgb = soft.into_vec();
+    let toward = [toward.0, toward.1, toward.2];
+    for pixel in rgb.as_chunks_mut::<3>().0 {
+        for (channel, toward) in pixel.iter_mut().zip(toward) {
+            *channel = ((*channel as u16 * 2 + toward as u16 * 3) / 5) as u8;
+        }
+    }
+    Ok(Pixels { size: target, rgb })
 }
 
 /// The size of a picture, read from its header.
@@ -153,6 +179,27 @@ mod tests {
         }
         assert_eq!(at(20, 0), [255, 255, 255]);
         assert_eq!(at(20, 20), [255, 255, 255]);
+    }
+
+    #[test]
+    fn the_backdrop_keeps_the_colours_but_not_the_details() {
+        // Fine stripes on the left, red on the right.
+        let paint = |x: u32, _| match x {
+            0..200 if x.is_multiple_of(2) => [255, 255, 255],
+            0..200 => [0, 0, 0],
+            _ => [255, 0, 0],
+        };
+        let black = Rgb(0, 0, 0);
+        let out = ambient(&png(400, 200, paint), Size::new(200, 100), black).unwrap();
+        let at = |x: usize, y: usize| out.rgb[(y * 200 + x) * 3..][..3].to_vec();
+        // The stripes melt into grey, and everything is darker than the picture.
+        let (a, b) = (at(40, 50), at(41, 50));
+        assert!(a[0].abs_diff(b[0]) < 4, "{a:?} {b:?}");
+        assert!((30..80).contains(&a[0]), "{a:?}");
+        let red = at(180, 50);
+        assert!(red[0] > 70 && red[0] < 110 && red[1] < 30, "{red:?}");
+        assert!(ambient(b"not an image", Size::new(10, 10), black).is_err());
+        assert!(ambient(&png(4, 4, |_, _| [0; 3]), Size::new(0, 10), black).is_err());
     }
 
     #[test]

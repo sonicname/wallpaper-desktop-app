@@ -1,6 +1,5 @@
-import { Theme } from "theme.slint";
-import { Button, Chip, IconButton, Switch } from "controls.slint";
-import { Option } from "detail.slint";
+import { Option, Theme } from "theme.slint";
+import { Button, Chip, Icon, IconButton, Icons, Switch } from "controls.slint";
 
 export struct DailyState {
     enabled: bool,
@@ -21,6 +20,26 @@ component Caption inherits Text {
     wrap: word-wrap;
 }
 
+component Heading inherits Text {
+    color: Theme.text;
+    font-size: 14px;
+    font-weight: 600;
+    wrap: word-wrap;
+}
+
+// Settings that belong together.
+component Group inherits Rectangle {
+    border-radius: 16px;
+    border-width: 1px;
+    border-color: #ffffff0f;
+    background: #ffffff0a;
+    VerticalLayout {
+        padding: 16px;
+        spacing: 16px;
+        @children
+    }
+}
+
 component Setting inherits HorizontalLayout {
     in property <string> title;
     in property <string> note;
@@ -32,12 +51,9 @@ component Setting inherits HorizontalLayout {
     VerticalLayout {
         horizontal-stretch: 1;
         spacing: 3px;
-        Text {
+        Heading {
             text: root.title;
             color: root.usable ? Theme.text : Theme.muted;
-            font-size: 14px;
-            font-weight: 600;
-            wrap: word-wrap;
         }
         if root.note != "": Caption { text: root.note; }
     }
@@ -72,11 +88,15 @@ component Choices inherits Rectangle {
     }
 }
 
-// A drawer over the right side of the window.
+// A panel over the right side of the window.
 export component DailyView inherits Rectangle {
     in property <DailyState> state;
     in property <bool> changing;
-    in property <length> panel: 380px;
+    in property <bool> open;
+    property <length> panel: 392px;
+    property <length> inset: 20px;
+    property <length> shift: root.open ? 0px : 32px;
+    animate shift { duration: 240ms; easing: ease-out; }
     callback close();
     callback toggle-enabled();
     callback toggle-paused();
@@ -89,7 +109,7 @@ export component DailyView inherits Rectangle {
     callback block();
     public function take-focus() { keys.focus(); }
 
-    background: #000000a0;
+    background: #000000b8;
     TouchArea {
         clicked => { root.close(); }
         scroll-event => { accept }
@@ -103,33 +123,43 @@ export component DailyView inherits Rectangle {
     }
 
     Rectangle {
-        x: root.width - panel;
+        x: root.width - panel - inset + shift;
+        y: inset;
         width: panel;
+        height: root.height - 2 * inset;
+        border-radius: 22px;
+        border-width: 1px;
+        border-color: #ffffff17;
         background: Theme.surface;
         TouchArea { scroll-event => { accept } }
 
-        Text {
-            x: 28px;
-            y: 24px;
-            text: "Đổi hình nền mỗi ngày";
-            color: Theme.text;
-            font-size: 18px;
-            font-weight: 600;
-        }
-        IconButton {
-            x: parent.width - 56px;
-            y: 16px;
-            label: "Đóng";
-            commands: "M 3.5 3.5 L 12.5 12.5 M 12.5 3.5 L 3.5 12.5";
-            activated => { root.close(); }
-        }
-
         VerticalLayout {
-            y: 72px;
-            height: parent.height - 72px;
-            padding: 28px;
-            padding-top: 8px;
+            padding: 22px;
             spacing: 18px;
+
+            HorizontalLayout {
+                spacing: 12px;
+                Rectangle {
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 12px;
+                    background: Theme.accent-soft;
+                    Icon { width: 18px; height: 18px; commands: Icons.sun; color: Theme.accent; }
+                }
+                Text {
+                    text: "Mỗi ngày một hình nền";
+                    color: Theme.text;
+                    font-size: 18px;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                IconButton {
+                    label: "Đóng";
+                    commands: Icons.close;
+                    activated => { root.close(); }
+                }
+            }
 
             Flickable {
                 vertical-stretch: 1;
@@ -137,86 +167,99 @@ export component DailyView inherits Rectangle {
                 content-height: settings.preferred-height;
                 settings := VerticalLayout {
                     alignment: start;
-                    spacing: 22px;
+                    spacing: 12px;
 
-                    Setting {
-                        title: "Tự đổi mỗi ngày";
-                        note: "Khi bật, đóng cửa sổ thì app vẫn chạy dưới khay hệ thống.";
-                        on: state.enabled;
-                        toggled => { root.toggle-enabled(); }
-                    }
-                    if state.enabled: Setting {
-                        title: "Tạm dừng";
-                        on: state.paused;
-                        toggled => { root.toggle-paused(); }
-                    }
-                    if state.enabled: HorizontalLayout {
-                        spacing: 10px;
-                        VerticalLayout {
-                            horizontal-stretch: 1;
-                            spacing: 3px;
-                            Text { text: "Giờ đổi"; color: Theme.text; font-size: 14px; font-weight: 600; }
-                            Caption { text: "Máy tắt lúc đó thì đổi khi mở lại."; }
+                    Group {
+                        Setting {
+                            title: "Tự đổi mỗi ngày";
+                            note: "Khi bật, đóng cửa sổ thì app vẫn chạy dưới khay hệ thống.";
+                            on: state.enabled;
+                            toggled => { root.toggle-enabled(); }
                         }
-                        VerticalLayout {
-                            alignment: start;
-                            IconButton {
-                                label: "Sớm hơn một giờ";
-                                commands: "M 3 8 L 13 8";
-                                activated => { root.shift-hour(-1); }
+                        if state.enabled: Setting {
+                            title: "Tạm dừng";
+                            on: state.paused;
+                            toggled => { root.toggle-paused(); }
+                        }
+                        if state.enabled: HorizontalLayout {
+                            spacing: 12px;
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: 3px;
+                                Heading { text: "Giờ đổi"; }
+                                Caption { text: "Máy tắt lúc đó thì đổi khi mở lại."; }
+                            }
+                            VerticalLayout {
+                                alignment: start;
+                                Rectangle {
+                                    width: 132px;
+                                    height: 40px;
+                                    border-radius: 13px;
+                                    background: Theme.raised;
+                                    HorizontalLayout {
+                                        padding: 4px;
+                                        IconButton {
+                                            size: 32px;
+                                            ghost: true;
+                                            label: "Sớm hơn một giờ";
+                                            commands: Icons.minus;
+                                            activated => { root.shift-hour(-1); }
+                                        }
+                                        Text {
+                                            text: state.hour;
+                                            color: Theme.text;
+                                            font-size: 15px;
+                                            font-weight: 600;
+                                            horizontal-alignment: center;
+                                            vertical-alignment: center;
+                                            horizontal-stretch: 1;
+                                        }
+                                        IconButton {
+                                            size: 32px;
+                                            ghost: true;
+                                            label: "Muộn hơn một giờ";
+                                            commands: Icons.plus;
+                                            activated => { root.shift-hour(1); }
+                                        }
+                                    }
+                                }
                             }
                         }
-                        VerticalLayout {
-                            alignment: start;
-                            Text {
-                                width: 52px;
-                                height: 40px;
-                                text: state.hour;
-                                color: Theme.text;
-                                font-size: 16px;
-                                horizontal-alignment: center;
-                                vertical-alignment: center;
+                    }
+                    Group {
+                        Setting {
+                            title: "Khởi động cùng Windows";
+                            note: state.autostart-note;
+                            usable: state.enabled || state.autostart;
+                            on: state.autostart;
+                            toggled => { root.toggle-autostart(); }
+                        }
+                    }
+                    if state.enabled: Group {
+                        if state.sources.length > 1: VerticalLayout {
+                            spacing: 10px;
+                            Heading { text: "Nguồn ảnh"; }
+                            Choices {
+                                options: state.sources;
+                                picked(i) => { root.pick-source(i); }
                             }
                         }
-                        VerticalLayout {
-                            alignment: start;
-                            IconButton {
-                                label: "Muộn hơn một giờ";
-                                commands: "M 3 8 L 13 8 M 8 3 L 8 13";
-                                activated => { root.shift-hour(1); }
+                        if state.sorts.length > 1: VerticalLayout {
+                            spacing: 10px;
+                            Heading { text: "Ưu tiên"; }
+                            Choices {
+                                options: state.sorts;
+                                picked(i) => { root.pick-sort(i); }
                             }
                         }
-                    }
-                    Setting {
-                        title: "Khởi động cùng Windows";
-                        note: state.autostart-note;
-                        usable: state.enabled || state.autostart;
-                        on: state.autostart;
-                        toggled => { root.toggle-autostart(); }
-                    }
-                    if state.enabled && state.sources.length > 1: VerticalLayout {
-                        spacing: 10px;
-                        Text { text: "Nguồn ảnh"; color: Theme.text; font-size: 14px; font-weight: 600; }
-                        Choices {
-                            options: state.sources;
-                            picked(i) => { root.pick-source(i); }
-                        }
-                    }
-                    if state.enabled && state.sorts.length > 1: VerticalLayout {
-                        spacing: 10px;
-                        Text { text: "Ưu tiên"; color: Theme.text; font-size: 14px; font-weight: 600; }
-                        Choices {
-                            options: state.sorts;
-                            picked(i) => { root.pick-sort(i); }
-                        }
-                    }
-                    if state.enabled && state.categories.length > 1: VerticalLayout {
-                        spacing: 10px;
-                        Text { text: "Danh mục"; color: Theme.text; font-size: 14px; font-weight: 600; }
-                        Choices {
-                            options: state.categories;
-                            quiet: true;
-                            picked(i) => { root.pick-category(i); }
+                        if state.categories.length > 1: VerticalLayout {
+                            spacing: 10px;
+                            Heading { text: "Danh mục"; }
+                            Choices {
+                                options: state.categories;
+                                quiet: true;
+                                picked(i) => { root.pick-category(i); }
+                            }
                         }
                     }
                 }
@@ -224,11 +267,25 @@ export component DailyView inherits Rectangle {
 
             if state.enabled: VerticalLayout {
                 spacing: 10px;
-                Text {
-                    text: state.status;
-                    color: state.problem ? Theme.danger : Theme.muted;
-                    font-size: 13px;
-                    wrap: word-wrap;
+                HorizontalLayout {
+                    spacing: 9px;
+                    VerticalLayout {
+                        padding-top: 6px;
+                        alignment: start;
+                        Rectangle {
+                            width: 8px;
+                            height: 8px;
+                            border-radius: 4px;
+                            background: state.problem ? Theme.danger : state.paused ? Theme.faint : Theme.good;
+                        }
+                    }
+                    Text {
+                        text: state.status;
+                        color: state.problem ? Theme.danger : Theme.muted;
+                        font-size: 13px;
+                        wrap: word-wrap;
+                        horizontal-stretch: 1;
+                    }
                 }
                 Button {
                     text: changing ? "Đang đổi…" : "Đổi ngay";
@@ -238,6 +295,7 @@ export component DailyView inherits Rectangle {
                 }
                 Button {
                     text: "Không hiện lại ảnh này";
+                    ghost: true;
                     enabled: !changing;
                     activated => { root.block(); }
                 }

@@ -8,7 +8,7 @@ use wallpaper_core::{Item, ListRequest, Provider, Sort, ThumbCrop};
 use wallpaper_host::{HostHttp, dimensions};
 
 use super::{Controller, model, with_current};
-use crate::{Option as UiOption, loader::Loader};
+use crate::{NavItem, loader::Loader};
 
 /// A provider with what the app keeps for it.
 pub(super) struct Source {
@@ -46,7 +46,8 @@ impl Controller {
         window.set_can_favorite(self.favorites.is_some());
         window.on_pick_source(|i| with_current(|c| c.pick_source(i as usize)));
         window.on_pick_folder(|| with_current(Controller::pick_folder));
-        window.on_toggle_favorite(|| with_current(Controller::toggle_favorite));
+        window.on_toggle_favorite(|| with_current(|c| c.toggle_favorite(c.selected.get())));
+        window.on_favorite_at(|i| with_current(|c| c.toggle_favorite(i as usize)));
         self.show_sources();
     }
 
@@ -102,11 +103,13 @@ impl Controller {
 
     pub(super) fn show_sources(&self) {
         let current = self.current.get();
-        let names = self.sources.iter().enumerate().map(|(i, source)| UiOption {
+        let places = self.sources.iter().enumerate().map(|(i, source)| NavItem {
             label: source.provider.info().name.into(),
+            kind: source.provider.info().id.into(),
             on: i == current,
         });
-        self.window.set_sources(model(names));
+        self.window.set_sources(model(places));
+        self.window.set_place(self.provider().info().name.into());
         let folder = self.shows(wallpaper_provider_folder::ID);
         self.window
             .set_can_search(self.provider().info().capabilities.search);
@@ -163,8 +166,7 @@ impl Controller {
         }
     }
 
-    fn toggle_favorite(&self) {
-        let index = self.selected.get();
+    fn toggle_favorite(&self, index: usize) {
         let (Some(favorites), Some(item)) = (self.favorites.clone(), self.grid.item(index)) else {
             return;
         };

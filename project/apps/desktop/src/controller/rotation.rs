@@ -122,7 +122,13 @@ impl Controller {
         let window = self.window.window().window_handle();
         let handle = window.window_handle().map(|h| h.as_raw());
         if let Ok(RawWindowHandle::Win32(handle)) = handle {
-            wallpaper_platform_windows::raise(handle.hwnd.get());
+            let window = handle.hwnd.get();
+            wallpaper_platform_windows::tint_title_bar(
+                window,
+                crate::grid::BACKGROUND,
+                crate::grid::LINE,
+            );
+            wallpaper_platform_windows::raise(window);
         }
     }
 
@@ -134,6 +140,8 @@ impl Controller {
             self.window.set_rows(Default::default());
             self.window.set_picture(Image::default());
             self.window.set_has_picture(false);
+            self.window.set_ambient(Image::default());
+            self.window.set_has_ambient(false);
             self.grid.release();
         } else {
             let _ = slint::quit_event_loop();

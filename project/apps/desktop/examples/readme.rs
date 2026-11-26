@@ -291,7 +291,7 @@ fn main() {
         })
         .collect();
     let info = ProviderInfo {
-        name: "Ảnh minh họa",
+        name: "Minh họa",
         ..*Wallhaven.info()
     };
 
@@ -364,6 +364,21 @@ fn main() {
     if let Some(more) = more {
         fs::create_dir_all(&more).unwrap();
         window.set_daily_open(false);
+        // The pointer over a picture, then its button to set it.
+        let position = slint::LogicalPosition::new(700.0, 420.0);
+        stage
+            .window
+            .dispatch_event(slint::platform::WindowEvent::PointerMoved { position });
+        stage.run_for(Duration::from_millis(400));
+        save(&stage, &more.join("hover.png"));
+        window.invoke_apply_at(4);
+        assert!(stage.run_until(WAIT, || !window.get_changing() && window.get_toast() != ""));
+        stage.run_for(Duration::from_millis(300));
+        save(&stage, &more.join("toast.png"));
+        stage
+            .window
+            .dispatch_event(slint::platform::WindowEvent::PointerExited);
+        window.invoke_close_toast();
         window.invoke_pick_source(1);
         assert!(stage.run_until(WAIT, || !window.get_busy()
             && window.get_rows().row_count() > 0));

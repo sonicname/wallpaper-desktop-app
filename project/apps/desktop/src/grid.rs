@@ -17,11 +17,13 @@ use crate::{
     loader::{Job, Loader},
 };
 
-pub const GAP: f32 = 12.0;
+pub const GAP: f32 = 14.0;
 pub const ROW_HEIGHT: f32 = 220.0;
 /// Must match `Theme.radius` and `Theme.background`.
-const RADIUS: f32 = 10.0;
-pub const BACKGROUND: Rgb = Rgb(0x0f, 0x10, 0x13);
+const RADIUS: f32 = 14.0;
+pub const BACKGROUND: Rgb = Rgb(0x0c, 0x0d, 0x10);
+/// Must match `Theme.line`.
+pub const LINE: Rgb = Rgb(0x25, 0x28, 0x2f);
 /// Rows kept decoded outside the visible area.
 const SPARE_ROWS: usize = 8;
 

@@ -232,7 +232,16 @@ fn favorites_and_a_folder_of_my_own() {
     assert!(stage.run_until(WAIT, count(6)));
     let names: Vec<_> = window.get_sources().iter().map(|s| s.label).collect();
     assert_eq!(names, ["Web", "Yêu thích", "Thư mục"]);
-    assert_eq!(on(window.get_sources()), [true, false, false]);
+    let shown = || {
+        window
+            .get_sources()
+            .iter()
+            .map(|s| s.on)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(shown(), [true, false, false]);
+    let kinds: Vec<_> = window.get_sources().iter().map(|s| s.kind).collect();
+    assert_eq!(kinds, ["web", "favorites", "folder"]);
 
     // A heart keeps a picture, and shows in the grid.
     window.invoke_open(2);
@@ -252,7 +261,7 @@ fn favorites_and_a_folder_of_my_own() {
     window.invoke_pick_source(1);
     assert!(!window.get_detail_open());
     assert!(stage.run_until(WAIT, count(1)));
-    assert_eq!(on(window.get_sources()), [false, true, false]);
+    assert_eq!(shown(), [false, true, false]);
     assert!(!window.get_can_search());
     assert_eq!(window.get_summary(), "1 ảnh");
     fs::remove_dir_all(app_data.join("thumbs")).unwrap();

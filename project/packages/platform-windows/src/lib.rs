@@ -12,7 +12,7 @@ mod workspace;
 
 pub use desktop::WindowsDesktop;
 pub use dialog::reveal;
-pub use instance::{Instance, raise};
+pub use instance::{Instance, raise, tint_title_bar};
 pub use link::open_link;
 pub use system::WindowsSystem;
 

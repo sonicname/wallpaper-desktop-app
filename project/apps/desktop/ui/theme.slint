@@ -1,14 +1,37 @@
 export global Theme {
-    // Thumbnails are rounded against `background` in Rust, so both values must match.
-    out property <color> background: #0f1013;
-    out property <color> surface: #191b20;
-    out property <color> raised: #24272e;
-    out property <color> line: #2d3139;
-    out property <color> text: #eef0f4;
-    out property <color> muted: #949aa6;
-    out property <color> accent: #f2b45c;
-    out property <color> on-accent: #1b1306;
-    out property <color> danger: #ff8f7a;
-    out property <length> radius: 10px;
-    out property <duration> quick: 120ms;
+    // Thumbnails are rounded against `background` in Rust (grid.rs), so both values must match.
+    out property <color> background: #0c0d10;
+    out property <color> rail: #111216;
+    out property <color> surface: #15171c;
+    out property <color> raised: #1e2127;
+    out property <color> hover: #292d35;
+    out property <color> line: #25282f;
+    out property <color> text: #f3f4f6;
+    out property <color> muted: #9097a3;
+    out property <color> faint: #5d636e;
+    out property <color> accent: #f5b85f;
+    // The accent as a tint behind something selected.
+    out property <color> accent-soft: #f5b85f24;
+    out property <color> on-accent: #1a1204;
+    out property <color> good: #7dd6a3;
+    out property <color> danger: #ff8a75;
+    // Behind controls that sit on a picture.
+    out property <color> glass: #0b0c0fd6;
+    // Panels that float over a picture or over the dimmed window.
+    out property <color> panel: #14161bf4;
+    // Must match the corners of the thumbnails made in Rust (grid.rs).
+    out property <length> radius: 14px;
+    out property <duration> quick: 140ms;
+}
+
+export struct Option {
+    label: string,
+    on: bool,
+}
+
+// A place in the navigation rail. `kind` chooses the icon: "favorites", "folder" or anything else.
+export struct NavItem {
+    label: string,
+    kind: string,
+    on: bool,
 }
