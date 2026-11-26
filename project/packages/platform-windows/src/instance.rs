@@ -1,9 +1,14 @@
-use std::thread;
+use std::{ffi::c_void, thread};
 
+use wallpaper_core::Rgb;
 use windows::{
     Win32::{
         Foundation::{
-            CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, HWND, WAIT_OBJECT_0,
+            COLORREF, CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, HWND, WAIT_OBJECT_0,
+        },
+        Graphics::Dwm::{
+            DWMWA_BORDER_COLOR, DWMWA_CAPTION_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE,
+            DWMWINDOWATTRIBUTE, DwmSetWindowAttribute,
         },
         System::Threading::{CreateEventW, INFINITE, SetEvent, WaitForSingleObject},
         UI::WindowsAndMessaging::{
@@ -67,10 +72,31 @@ pub fn raise(window: isize) {
     }
 }
 
+/// Gives the title bar of a window the colour of its content, with light buttons. Windows 10
+/// only knows the dark title bar and ignores the colours. Returns whether anything was accepted.
+pub fn tint_title_bar(window: isize, color: Rgb, border: Rgb) -> bool {
+    let window = HWND(window as _);
+    let set = |attribute: DWMWINDOWATTRIBUTE, value: u32| {
+        let value: *const c_void = (&raw const value).cast();
+        // SAFETY: the pointer and the size describe the same four bytes; a stale handle fails.
+        unsafe { DwmSetWindowAttribute(window, attribute, value, 4) }.is_ok()
+    };
+    let packed = |Rgb(r, g, b): Rgb| COLORREF(r as u32 | (g as u32) << 8 | (b as u32) << 16).0;
+    let dark = set(DWMWA_USE_IMMERSIVE_DARK_MODE, 1);
+    let caption = set(DWMWA_CAPTION_COLOR, packed(color));
+    let edge = set(DWMWA_BORDER_COLOR, packed(border));
+    dark || caption || edge
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::{sync::mpsc, time::Duration};
+
+    #[test]
+    fn a_window_that_is_gone_is_not_tinted() {
+        assert!(!tint_title_bar(0, Rgb(0, 0, 0), Rgb(0, 0, 0)));
+    }
 
     #[test]
     fn the_second_copy_calls_the_first() {

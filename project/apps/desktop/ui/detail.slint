@@ -1,10 +1,5 @@
-import { Theme } from "theme.slint";
-import { Button, Chip, IconButton } from "controls.slint";
-
-export struct Option {
-    label: string,
-    on: bool,
-}
+import { Option, Theme } from "theme.slint";
+import { Button, Chip, Icon, IconButton, Icons } from "controls.slint";
 
 export struct Detail {
     resolution: string,
@@ -20,12 +15,23 @@ export struct Detail {
     palette: [color],
 }
 
-component Fact inherits VerticalLayout {
+component Fact inherits HorizontalLayout {
     in property <string> name;
     in property <string> value;
-    spacing: 2px;
-    Text { text: name; color: Theme.muted; font-size: 12px; }
-    Text { text: value; color: Theme.text; font-size: 14px; wrap: word-wrap; }
+    spacing: 12px;
+    Text {
+        width: 52px;
+        text: name;
+        color: Theme.faint;
+        font-size: 13px;
+    }
+    Text {
+        text: value;
+        color: Theme.text;
+        font-size: 13px;
+        wrap: word-wrap;
+        horizontal-stretch: 1;
+    }
 }
 
 export component DetailView inherits Rectangle {
@@ -33,6 +39,10 @@ export component DetailView inherits Rectangle {
     in property <image> picture;
     in property <bool> has-picture;
     in property <bool> sharp;
+    // A blurred, dark copy of the picture that fills the window behind everything.
+    in property <image> ambient;
+    in property <bool> has-ambient;
+    in property <bool> open;
     in property <float> screen-aspect: 1.7778;
     in property <string> screen-name;
     in property <[Option]> targets;
@@ -42,10 +52,16 @@ export component DetailView inherits Rectangle {
     in property <bool> can-favorite;
     out property <length> picture-width: frame.width - 2 * bezel;
     out property <length> picture-height: frame.height - 2 * bezel;
-    property <length> bezel: 8px;
-    property <length> panel: 320px;
-    property <length> room-width: root.width - panel - 128px;
-    property <length> room-height: root.height - 150px;
+    property <length> bezel: 6px;
+    property <length> inset: 20px;
+    property <length> panel: 348px;
+    // What is left of the panel.
+    property <length> stage: root.width - panel - inset;
+    property <length> room-width: stage - 2 * 84px;
+    property <length> room-height: root.height - 170px;
+    // The panel comes in from the right.
+    property <length> shift: root.open ? 0px : 32px;
+    animate shift { duration: 240ms; easing: ease-out; }
     callback close();
     callback step(int);
     callback open-source();
@@ -57,6 +73,13 @@ export component DetailView inherits Rectangle {
     background: Theme.background;
     // Swallows clicks and scrolling meant for the grid underneath.
     TouchArea { scroll-event => { accept } }
+
+    if has-ambient: Image {
+        width: 100%;
+        height: 100%;
+        source: ambient;
+        image-fit: fill;
+    }
 
     keys := FocusScope {
         key-pressed(event) => {
@@ -70,21 +93,26 @@ export component DetailView inherits Rectangle {
 
     Rectangle {
         x: 0;
-        width: root.width - panel;
+        width: stage;
 
         // The picture is cropped exactly the way the screen would crop it.
         frame := Rectangle {
             width: min(room-width, (room-height - 2 * bezel) * screen-aspect + 2 * bezel);
             height: (self.width - 2 * bezel) / screen-aspect + 2 * bezel;
-            y: (parent.height - self.height - 44px) / 2;
-            border-radius: 14px;
-            background: #050506;
+            y: (parent.height - self.height - 48px) / 2;
+            border-radius: 12px;
+            background: #040405;
             border-width: 1px;
-            border-color: Theme.line;
+            border-color: #ffffff1f;
+            drop-shadow-blur: 48px;
+            drop-shadow-offset-y: 18px;
+            drop-shadow-color: #000000a0;
 
             Rectangle {
                 width: parent.width - 2 * bezel;
                 height: parent.height - 2 * bezel;
+                border-radius: 7px;
+                clip: true;
                 background: detail.tint;
                 if has-picture: Image {
                     width: 100%;
@@ -95,10 +123,10 @@ export component DetailView inherits Rectangle {
                 if !sharp: Rectangle {
                     x: parent.width - self.width - 12px;
                     y: parent.height - self.height - 12px;
-                    width: wait.preferred-width + 20px;
-                    height: 26px;
-                    border-radius: 13px;
-                    background: #0b0c0ee0;
+                    width: wait.preferred-width + 22px;
+                    height: 28px;
+                    border-radius: 14px;
+                    background: Theme.glass;
                     wait := Text { text: "Đang tải ảnh gốc…"; color: Theme.text; font-size: 12px; }
                 }
             }
@@ -106,95 +134,150 @@ export component DetailView inherits Rectangle {
         // Stand.
         Rectangle {
             y: frame.y + frame.height;
-            width: 72px;
-            height: 22px;
-            background: #17191d;
+            width: 56px;
+            height: 18px;
+            background: #0a0b0d;
         }
         Rectangle {
-            y: frame.y + frame.height + 22px;
-            width: 180px;
+            y: frame.y + frame.height + 18px;
+            width: 148px;
             height: 5px;
             border-radius: 2.5px;
-            background: Theme.line;
+            background: #1a1c21;
         }
-        Text {
-            y: frame.y + frame.height + 36px;
-            text: "Xem trước trên màn hình " + screen-name;
-            color: Theme.muted;
-            font-size: 12px;
+        Rectangle {
+            y: frame.y + frame.height + 38px;
+            width: caption.preferred-width + 26px;
+            height: 28px;
+            border-radius: 14px;
+            background: Theme.glass;
+            HorizontalLayout {
+                alignment: center;
+                spacing: 7px;
+                VerticalLayout {
+                    alignment: center;
+                    Icon { width: 13px; height: 13px; commands: Icons.screen; }
+                }
+                caption := Text {
+                    text: "Xem trước trên màn hình " + screen-name;
+                    color: Theme.muted;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                }
+            }
         }
         IconButton {
-            x: 12px;
+            x: 24px;
+            glass: true;
+            size: 44px;
             label: "Ảnh trước";
-            commands: "M 10 3 L 5 8 L 10 13";
+            commands: Icons.left;
             activated => { root.step(-1); }
         }
         IconButton {
-            x: parent.width - 52px;
+            x: parent.width - self.width - 24px;
+            glass: true;
+            size: 44px;
             label: "Ảnh sau";
-            commands: "M 6 3 L 11 8 L 6 13";
+            commands: Icons.right;
             activated => { root.step(1); }
         }
     }
 
     Rectangle {
-        x: root.width - panel;
+        x: root.width - panel - inset + shift;
+        y: inset;
         width: panel;
-        background: Theme.surface;
-
-        if can-favorite: IconButton {
-            x: parent.width - 104px;
-            y: 16px;
-            label: detail.favorite ? "Bỏ khỏi yêu thích" : "Thêm vào yêu thích";
-            checkable: true;
-            checked: detail.favorite;
-            active: detail.favorite;
-            commands: "M 8 14 C 2.5 10.2 1 7.4 1 5.2 C 1 3.1 2.6 1.6 4.6 1.6 C 6 1.6 7.2 2.4 8 3.6 C 8.8 2.4 10 1.6 11.4 1.6 C 13.4 1.6 15 3.1 15 5.2 C 15 7.4 13.5 10.2 8 14 Z";
-            activated => { root.toggle-favorite(); }
-        }
-        IconButton {
-            x: parent.width - 56px;
-            y: 16px;
-            label: "Đóng";
-            commands: "M 3.5 3.5 L 12.5 12.5 M 12.5 3.5 L 3.5 12.5";
-            activated => { root.close(); }
-        }
+        height: root.height - 2 * inset;
+        border-radius: 22px;
+        border-width: 1px;
+        border-color: #ffffff17;
+        background: Theme.panel;
 
         VerticalLayout {
-            padding: 28px;
-            padding-top: 76px;
-            spacing: 22px;
+            padding: 22px;
+            spacing: 18px;
+
+            HorizontalLayout {
+                spacing: 8px;
+                Text {
+                    text: detail.resolution;
+                    color: Theme.text;
+                    font-size: 26px;
+                    font-weight: 700;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                }
+                if can-favorite: IconButton {
+                    label: detail.favorite ? "Bỏ khỏi yêu thích" : "Thêm vào yêu thích";
+                    checkable: true;
+                    checked: detail.favorite;
+                    active: detail.favorite;
+                    commands: Icons.heart;
+                    activated => { root.toggle-favorite(); }
+                }
+                IconButton {
+                    label: "Đóng";
+                    commands: Icons.close;
+                    activated => { root.close(); }
+                }
+            }
 
             // Facts scroll when the window is low, so that the buttons always stay in reach.
             Flickable {
                 vertical-stretch: 1;
-                min-height: 80px;
+                min-height: 60px;
                 content-height: facts.preferred-height;
                 facts := VerticalLayout {
                     alignment: start;
-                    spacing: 22px;
+                    spacing: 18px;
 
-                    Text { text: detail.resolution; color: Theme.text; font-size: 28px; font-weight: 600; }
-
-                    VerticalLayout {
-                        spacing: 4px;
-                        Text {
-                            text: detail.fit-title;
-                            color: detail.fit-good ? Theme.accent : Theme.danger;
-                            font-size: 15px;
-                            font-weight: 600;
-                            wrap: word-wrap;
+                    Rectangle {
+                        border-radius: 14px;
+                        background: detail.fit-good ? #7dd6a31c : #ff8a751c;
+                        VerticalLayout {
+                            padding: 14px;
+                            spacing: 4px;
+                            HorizontalLayout {
+                                spacing: 9px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Rectangle {
+                                        width: 8px;
+                                        height: 8px;
+                                        border-radius: 4px;
+                                        background: detail.fit-good ? Theme.good : Theme.danger;
+                                    }
+                                }
+                                Text {
+                                    text: detail.fit-title;
+                                    color: detail.fit-good ? Theme.good : Theme.danger;
+                                    font-size: 14px;
+                                    font-weight: 600;
+                                    wrap: word-wrap;
+                                    horizontal-stretch: 1;
+                                }
+                            }
+                            Text { text: detail.fit-note; color: Theme.muted; font-size: 13px; wrap: word-wrap; }
                         }
-                        Text { text: detail.fit-note; color: Theme.muted; font-size: 13px; wrap: word-wrap; }
                     }
 
                     if detail.palette.length > 0: HorizontalLayout {
-                        height: 36px;
-                        for shade in detail.palette: Rectangle { background: shade; }
+                        height: 26px;
+                        spacing: 6px;
+                        for shade in detail.palette: Rectangle {
+                            border-radius: 8px;
+                            background: shade;
+                            border-width: 1px;
+                            border-color: #ffffff1a;
+                        }
                     }
 
-                    Fact { name: "Tệp"; value: detail.file; }
-                    Fact { name: "Nguồn"; value: detail.source; }
+                    VerticalLayout {
+                        spacing: 10px;
+                        Fact { name: "Tệp"; value: detail.file; }
+                        Fact { name: "Nguồn"; value: detail.source; }
+                    }
                 }
             }
 
@@ -203,20 +286,25 @@ export component DetailView inherits Rectangle {
                 if warning != "": Text { text: warning; color: Theme.danger; font-size: 13px; wrap: word-wrap; }
                 for target[i] in targets: Chip {
                     text: target.label;
-                    quiet: true;
                     checked: target.on;
                     activated => { root.pick-target(i); }
                 }
                 Button {
                     text: changing ? "Đang đổi…" : "Đặt làm hình nền";
+                    icon: Icons.screen;
                     primary: true;
                     enabled: can-apply && !changing;
                     activated => { root.apply(); }
                 }
-                if detail.page-label != "": Button { text: detail.page-label; activated => { root.open-source(); } }
+                if detail.page-label != "": Button {
+                    text: detail.page-label;
+                    icon: Icons.link;
+                    ghost: true;
+                    activated => { root.open-source(); }
+                }
                 Text {
                     text: "Bản quyền ảnh thuộc về tác giả.";
-                    color: Theme.muted;
+                    color: Theme.faint;
                     font-size: 12px;
                     horizontal-alignment: center;
                 }

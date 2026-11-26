@@ -1,11 +1,11 @@
-import { Theme } from "theme.slint";
-import { Button, Chip, IconButton, SearchField, Swatch, Tab } from "controls.slint";
+import { NavItem, Option, Theme } from "theme.slint";
+import { Button, Chip, IconButton, Icons, Notice, RailItem, SearchField, Segmented, Swatch } from "controls.slint";
 import { Cell, Grid, Row } from "grid.slint";
 import { DailyState, DailyView } from "daily.slint";
-import { Detail, DetailView, Option } from "detail.slint";
+import { Detail, DetailView } from "detail.slint";
 import { Tray } from "tray.slint";
 
-export { Cell, Row, DailyState, Detail, Option, Tray }
+export { Cell, Row, DailyState, Detail, NavItem, Option, Tray }
 
 export struct Shade {
     color: color,
@@ -21,13 +21,13 @@ export component AppWindow inherits Window {
     min-width: 1120px;
     min-height: 600px;
     background: Theme.background;
-    default-font-family: "Segoe UI";
+    default-font-family: "Segoe UI Variable Text";
 
     in property <image> app-icon;
     in property <bool> can-search;
     in property <string> search-hint;
     in-out property <string> search-text <=> search.text;
-    in property <[Option]> sources;
+    in property <[NavItem]> sources;
     // The name of the chosen folder, while the folder source is shown.
     in property <string> folder-label;
     in property <bool> needs-folder;
@@ -35,6 +35,9 @@ export component AppWindow inherits Window {
     callback pick-source(int);
     callback pick-folder();
     callback toggle-favorite();
+    // From the buttons on a picture in the grid.
+    callback favorite-at(int);
+    callback apply-at(int);
     in property <[Option]> sorts;
     in property <[Option]> categories;
     in property <[Shade]> shades;
@@ -57,6 +60,8 @@ export component AppWindow inherits Window {
     in property <image> picture;
     in property <bool> has-picture;
     in property <bool> picture-sharp;
+    in property <image> ambient;
+    in property <bool> has-ambient;
     out property <length> picture-width: detail-view.picture-width;
     out property <length> picture-height: detail-view.picture-height;
 
@@ -96,145 +101,182 @@ export component AppWindow inherits Window {
     callback next-daily();
     callback block-daily();
 
+    // The name of the source that is shown.
+    in property <string> place;
+
     changed grid-width => { layout-changed(); }
     changed grid-height => { layout-changed(); }
 
-    VerticalLayout {
-        padding: 20px;
-        padding-bottom: 0;
-        spacing: 12px;
-
-        HorizontalLayout {
-            spacing: 16px;
-            height: 40px;
-            if sources.length > 1: HorizontalLayout {
-                spacing: 2px;
-                for source[i] in sources: Tab {
-                    text: source.label;
-                    checked: source.on;
-                    activated => { root.pick-source(i); }
-                }
-            }
-            search := SearchField {
-                visible: can-search;
-                min-width: 200px;
-                max-width: 420px;
-                horizontal-stretch: 1;
-                placeholder: search-hint;
-                submitted(text) => { root.search(text); }
-            }
-            HorizontalLayout {
-                spacing: 8px;
-                alignment: center;
-                padding-top: 4px;
-                padding-bottom: 4px;
-                for option[i] in sorts: Chip {
-                    text: option.label;
-                    checked: option.on;
-                    activated => { root.pick-sort(i); }
-                }
-            }
-            Text {
-                text: summary;
-                color: Theme.muted;
-                font-size: 13px;
-                horizontal-alignment: right;
-                vertical-alignment: center;
-                horizontal-stretch: 1;
-                overflow: elide;
-            }
-            if has-daily: VerticalLayout {
-                alignment: center;
-                Chip {
-                    text: daily.enabled ? (daily.paused ? "Mỗi ngày: tạm dừng" : "Mỗi ngày: bật") : "Mỗi ngày";
-                    quiet: true;
-                    checked: daily.enabled;
-                    activated => { root.open-daily(); }
-                }
-            }
-        }
-
-        HorizontalLayout {
-            spacing: 8px;
-            height: 32px;
-            if folder-label != "": Chip {
-                quiet: true;
-                text: folder-label;
-                activated => { root.pick-folder(); }
-            }
-            if folder-label != "": Rectangle { width: 1px; background: Theme.line; }
-            if screen-fit.label != "": Chip {
-                quiet: true;
-                text: screen-fit.label;
-                checked: screen-fit.on;
-                activated => { root.toggle-screen-fit(); }
-            }
-            if screen-fit.label != "" && categories.length > 0: Rectangle { width: 1px; background: Theme.line; }
-            for option[i] in categories: Chip {
-                text: option.label;
-                quiet: true;
-                checked: option.on;
-                activated => { root.pick-category(i); }
-            }
-            if shades.length > 0: Rectangle { width: 1px; background: Theme.line; }
-            HorizontalLayout {
-                for shade[i] in shades: Swatch {
-                    shade: shade.color;
-                    label: shade.name;
-                    checked: shade.on;
-                    activated => { root.pick-shade(i); }
-                }
-            }
-            Rectangle { horizontal-stretch: 1; }
-            if can-undo: Button {
-                height: 32px;
-                width: 160px;
-                small: true;
-                text: "Hoàn tác hình nền";
-                enabled: !changing;
-                activated => { root.undo(); }
-            }
-        }
-
+    HorizontalLayout {
+        // Where to look for pictures, and the daily change at the bottom.
         Rectangle {
-            vertical-stretch: 1;
-            grid := Grid {
-                width: 100%;
-                height: 100%;
-                rows: root.rows;
-                gap: root.gap;
-                busy: root.busy;
-                scroll <=> root.scroll;
-                activated(index) => { root.open(index); }
+            width: 80px;
+            background: Theme.rail;
+            Rectangle {
+                x: parent.width - 1px;
+                width: 1px;
+                background: Theme.line;
             }
-            if needs-folder: VerticalLayout {
-                alignment: center;
-                spacing: 16px;
-                Text {
-                    text: "Chọn một thư mục ảnh trên máy để xem và đặt làm hình nền.";
-                    color: Theme.text;
-                    font-size: 16px;
-                    horizontal-alignment: center;
-                    wrap: word-wrap;
-                }
+            VerticalLayout {
+                padding-top: 18px;
+                padding-bottom: 14px;
+                spacing: 6px;
                 HorizontalLayout {
                     alignment: center;
-                    Button { width: 160px; text: "Chọn thư mục"; primary: true; activated => { root.pick-folder(); } }
+                    Image {
+                        width: 36px;
+                        height: 36px;
+                        source: app-icon;
+                    }
+                }
+                Rectangle { height: 12px; }
+                for source[i] in sources: HorizontalLayout {
+                    alignment: center;
+                    RailItem {
+                        text: source.label;
+                        commands: source.kind == "favorites" ? Icons.heart : source.kind == "folder" ? Icons.folder : Icons.compass;
+                        checked: source.on;
+                        activated => { root.pick-source(i); }
+                    }
+                }
+                Rectangle { vertical-stretch: 1; }
+                if has-daily: HorizontalLayout {
+                    alignment: center;
+                    RailItem {
+                        text: "Mỗi ngày";
+                        commands: Icons.sun;
+                        checked: daily-open;
+                        dot: daily.enabled;
+                        dot-color: daily.paused ? Theme.faint : Theme.accent;
+                        activated => { root.open-daily(); }
+                    }
                 }
             }
-            if message != "": VerticalLayout {
-                alignment: center;
-                spacing: 16px;
-                Text {
-                    text: message;
-                    color: Theme.text;
-                    font-size: 16px;
-                    horizontal-alignment: center;
-                    wrap: word-wrap;
+        }
+
+        VerticalLayout {
+            padding: 24px;
+            padding-bottom: 0;
+            spacing: 14px;
+
+            HorizontalLayout {
+                spacing: 14px;
+                height: 44px;
+                Rectangle {
+                    min-width: 220px;
+                    max-width: 520px;
+                    horizontal-stretch: 1;
+                    search := SearchField {
+                        visible: can-search;
+                        width: 100%;
+                        placeholder: search-hint;
+                        submitted(text) => { root.search(text); }
+                    }
+                    // A source without search shows its name instead.
+                    if !can-search: Text {
+                        x: 2px;
+                        width: parent.width;
+                        height: parent.height;
+                        text: place;
+                        color: Theme.text;
+                        font-size: 24px;
+                        font-weight: 700;
+                        vertical-alignment: center;
+                    }
                 }
-                if can-retry: HorizontalLayout {
+                if sorts.length > 1: VerticalLayout {
                     alignment: center;
-                    Button { width: 140px; text: "Thử lại"; primary: true; activated => { root.retry(); } }
+                    Segmented {
+                        options: sorts;
+                        picked(i) => { root.pick-sort(i); }
+                    }
+                }
+                Text {
+                    text: summary;
+                    color: Theme.muted;
+                    font-size: 13px;
+                    horizontal-alignment: right;
+                    vertical-alignment: center;
+                    horizontal-stretch: 1;
+                    overflow: elide;
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 8px;
+                height: 32px;
+                if folder-label != "": Chip {
+                    quiet: true;
+                    icon: Icons.folder;
+                    text: folder-label;
+                    activated => { root.pick-folder(); }
+                }
+                if folder-label != "": Rectangle { width: 1px; background: Theme.line; }
+                if screen-fit.label != "": Chip {
+                    icon: Icons.screen;
+                    text: screen-fit.label;
+                    checked: screen-fit.on;
+                    activated => { root.toggle-screen-fit(); }
+                }
+                if screen-fit.label != "" && categories.length > 0: Rectangle { width: 1px; background: Theme.line; }
+                for option[i] in categories: Chip {
+                    text: option.label;
+                    quiet: true;
+                    checked: option.on;
+                    activated => { root.pick-category(i); }
+                }
+                if shades.length > 0: Rectangle { width: 1px; background: Theme.line; }
+                HorizontalLayout {
+                    for shade[i] in shades: Swatch {
+                        shade: shade.color;
+                        label: shade.name;
+                        checked: shade.on;
+                        activated => { root.pick-shade(i); }
+                    }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                if can-undo: Button {
+                    small: true;
+                    ghost: true;
+                    icon: Icons.undo;
+                    text: "Hoàn tác";
+                    enabled: !changing;
+                    activated => { root.undo(); }
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                grid := Grid {
+                    width: 100%;
+                    height: 100%;
+                    rows: root.rows;
+                    gap: root.gap;
+                    busy: root.busy;
+                    can-favorite: root.can-favorite;
+                    can-apply: root.can-apply && !root.changing;
+                    scroll <=> root.scroll;
+                    activated(index) => { root.open(index); }
+                    favorite(index) => { root.favorite-at(index); }
+                    apply(index) => { root.apply-at(index); }
+                }
+                if needs-folder: Notice {
+                    icon: Icons.folder;
+                    title: "Ảnh từ thư mục của bạn";
+                    text: "Chọn một thư mục ảnh trên máy để xem và đặt làm hình nền.";
+                    HorizontalLayout {
+                        alignment: center;
+                        Button { text: "Chọn thư mục"; primary: true; activated => { root.pick-folder(); } }
+                    }
+                }
+                if message != "": Notice {
+                    icon: can-retry ? Icons.alert : Icons.picture;
+                    problem: can-retry;
+                    text: message;
+                    if can-retry: HorizontalLayout {
+                        alignment: center;
+                        Button { text: "Thử lại"; primary: true; activated => { root.retry(); } }
+                    }
                 }
             }
         }
@@ -246,10 +288,13 @@ export component AppWindow inherits Window {
         x: detail-open ? 0px : root.width * 2;
         width: root.width;
         height: root.height;
+        open: detail-open;
         detail: root.detail;
         picture: root.picture;
         has-picture: root.has-picture;
         sharp: root.picture-sharp;
+        ambient: root.ambient;
+        has-ambient: root.has-ambient;
         screen-aspect: root.screen-aspect;
         screen-name: root.screen-name;
         targets: root.targets;
@@ -269,6 +314,7 @@ export component AppWindow inherits Window {
         x: daily-open ? 0px : root.width * 2;
         width: root.width;
         height: root.height;
+        open: daily-open;
         state: root.daily;
         changing: root.changing;
         close => { root.daily-open = false; }
@@ -285,26 +331,33 @@ export component AppWindow inherits Window {
     changed daily-open => { if (daily-open) { daily-view.take-focus(); } }
 
     if toast != "": Rectangle {
-        y: root.height - self.height - 24px;
+        y: root.height - self.height - 28px;
         width: message-row.preferred-width;
-        height: 56px;
-        border-radius: 12px;
+        height: 52px;
+        border-radius: 16px;
         border-width: 1px;
-        border-color: Theme.line;
+        border-color: #ffffff1f;
         background: Theme.raised;
+        drop-shadow-blur: 32px;
+        drop-shadow-offset-y: 10px;
+        drop-shadow-color: #000000a0;
         accessible-role: text;
         accessible-label: toast;
         // Clicks next to the buttons must not reach what is underneath.
         TouchArea { }
         message-row := HorizontalLayout {
-            padding: 8px;
+            padding: 6px;
             padding-left: 20px;
-            spacing: 16px;
+            spacing: 12px;
             Text { text: toast; color: Theme.text; font-size: 14px; vertical-alignment: center; }
-            if can-undo: Button { text: "Hoàn tác"; width: 104px; enabled: !changing; activated => { root.undo(); } }
+            if can-undo: VerticalLayout {
+                alignment: center;
+                Button { small: true; icon: Icons.undo; text: "Hoàn tác"; enabled: !changing; activated => { root.undo(); } }
+            }
             IconButton {
+                ghost: true;
                 label: "Ẩn thông báo";
-                commands: "M 4.5 4.5 L 11.5 11.5 M 11.5 4.5 L 4.5 11.5";
+                commands: Icons.close;
                 activated => { root.close-toast(); }
             }
         }

@@ -21,7 +21,7 @@ use wallpaper_core::{
 };
 use wallpaper_daily::Daily;
 use wallpaper_favorites::Favorites;
-use wallpaper_host::{DiskCache, Gallery, Pixels, cover};
+use wallpaper_host::{DiskCache, Gallery, Pixels, ambient, cover};
 use wallpaper_provider_folder::Folder;
 
 use library::Source;
@@ -303,6 +303,12 @@ impl Controller {
             .on_toggle_screen_fit(|| with_current(|c| c.change(|l| l.fit_screen = !l.fit_screen)));
         window.on_retry(|| with_current(|c| c.load_more_after_error()));
         window.on_open(|i| with_current(|c| c.show(i as usize)));
+        window.on_apply_at(|i| {
+            with_current(|c| {
+                c.selected.set(i as usize);
+                c.apply();
+            })
+        });
         window.on_step(|by| {
             with_current(|c| {
                 if let Some(next) = c.selected.get().checked_add_signed(by as isize)
@@ -576,16 +582,23 @@ impl Controller {
             px(self.window.get_picture_width()),
             px(self.window.get_picture_height()),
         );
+        // The backdrop is soft anyway, so a third of the window is enough.
+        let size = self.window.window().size();
+        let backdrop = Size::new(size.width / 3, size.height / 3);
         let (current, loader) = (self.preview.clone(), self.loader.share());
         thread::spawn(move || {
             let wanted = || current.load(Ordering::Relaxed) == ticket;
             let decode = |bytes: Vec<u8>| cover(&bytes, target, 0.0, grid::BACKGROUND).ok();
-            let quick = item
-                .best_thumb(target)
-                .and_then(|t| loader.thumb(&t.url))
-                .and_then(decode);
-            if let Some(pixels) = quick {
-                deliver_preview(ticket, Some(pixels), false);
+            let thumb = item.best_thumb(target).and_then(|t| loader.thumb(&t.url));
+            if let Some(bytes) = thumb {
+                if let Ok(glow) = ambient(&bytes, backdrop, grid::BACKGROUND) {
+                    let _ = slint::invoke_from_event_loop(move || {
+                        with_current(|c| c.receive_ambient(ticket, glow))
+                    });
+                }
+                if let Some(pixels) = decode(bytes) {
+                    deliver_preview(ticket, Some(pixels), false);
+                }
             }
             // Holding an arrow key must not download every original on the way.
             thread::sleep(Duration::from_millis(250));
@@ -747,6 +760,13 @@ impl Controller {
         self.toast.start(TimerMode::SingleShot, TOAST, || {
             with_current(|c| c.window.set_toast(SharedString::new()))
         });
+    }
+
+    fn receive_ambient(&self, ticket: u64, glow: Pixels) {
+        if self.preview.load(Ordering::Relaxed) == ticket {
+            self.window.set_ambient(grid::to_image(&glow));
+            self.window.set_has_ambient(true);
+        }
     }
 
     fn receive_preview(&self, ticket: u64, pixels: Option<Pixels>, last: bool) {
